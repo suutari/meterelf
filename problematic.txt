@@ -15,3 +15,5 @@
 /home/tuomas/water-meter/20180814074748-00-e07.jpg
 /home/tuomas/water-meter/20180814074956-00-e07.jpg
 /home/tuomas/water-meter/20180814074957-01-e07.jpg
+/home/tuomas/water-meter/20180815222010-00-e251.jpg
+/home/tuomas/water-meter/20180815222002-00-e251.jpg
