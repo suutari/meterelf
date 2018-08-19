@@ -17,6 +17,8 @@ Image = numpy.ndarray
 Point = Tuple[int, int]
 FloatPoint = Tuple[float, float]
 
+DEBUG = False
+
 
 class HlsColor(numpy.ndarray):
     def __new__(
@@ -297,7 +299,8 @@ def get_roll_color(rolls_hls: Image, roll_data: RollData) -> HlsColor:
 def get_meter_value(fn: str) -> Dict[str, float]:
     rolls_hls = get_rolls_hls(fn)
 
-    debug = convert_to_bgr(rolls_hls)
+    if DEBUG:
+        debug = convert_to_bgr(rolls_hls)
 
     result = {}
     
@@ -316,7 +319,8 @@ def get_meter_value(fn: str) -> Dict[str, float]:
             cv2.CHAIN_APPROX_NONE)
         contour = sorted(contours, key=cv2.contourArea)[-1]
         if cv2.contourArea(contour) > 100:
-            cv2.drawContours(debug, [contour], -1, (255, 255, 0), -1)
+            if DEBUG:
+                cv2.drawContours(debug, [contour], -1, (255, 255, 0), -1)
             needle_mask = needle_mask_de.copy()
             needle_mask.fill(0)
             cv2.drawContours(needle_mask, [contour], -1, 255, -1)
@@ -340,11 +344,11 @@ def get_meter_value(fn: str) -> Dict[str, float]:
         momentum_vector = (mom_sign * momentum_x, mom_sign * momentum_y)
         momentum_angle = get_angle_by_vector(momentum_vector)
             
-        # DEBUG
-        mom_scale = math.sqrt(momentum_x ** 2 + momentum_y ** 2)
-        mom_x = center[0] + 20 * mom_sign * momentum_x / mom_scale
-        mom_y = center[1] + 20 * mom_sign * momentum_y / mom_scale
-        cv2.circle(debug, float_point_to_int((mom_x, mom_y)), 2, (0, 0, 255))
+        if DEBUG:
+            mom_scale = math.sqrt(momentum_x ** 2 + momentum_y ** 2)
+            mom_x = center[0] + 20 * mom_sign * momentum_x / mom_scale
+            mom_y = center[1] + 20 * mom_sign * momentum_y / mom_scale
+            cv2.circle(debug, float_point_to_int((mom_x, mom_y)), 2, (0, 0, 255))
 
         outer_points = cv2.findNonZero(needle_mask & roll_data.circle_mask)
         if outer_points is None:
@@ -353,7 +357,8 @@ def get_meter_value(fn: str) -> Dict[str, float]:
         angles = []
         for outer_point in outer_points:
             (x, y) = outer_point[0] - roll_data.center
-            cv2.circle(debug, tuple(outer_point[0]), 0, (0, 128, 128))
+            if DEBUG:
+                cv2.circle(debug, tuple(outer_point[0]), 0, (0, 128, 128))
             angle = get_angle_by_vector((x, y))
             if angle is not None:
                 angle_dist_from_mom = min(
@@ -361,9 +366,11 @@ def get_meter_value(fn: str) -> Dict[str, float]:
                     abs(abs(angle - momentum_angle) - 1))
                 if angle_dist_from_mom < 0.25:
                     angles.append(angle)
-                    cv2.circle(debug, tuple(outer_point[0]), 0, (0, 255, 255))
+                    if DEBUG:
+                        cv2.circle(debug, tuple(outer_point[0]), 0, (0, 255, 255))
 
-        cv2.circle(debug, float_point_to_int(roll_data.center), 3, (0, 255, 0))
+        if DEBUG:
+            cv2.circle(debug, float_point_to_int(roll_data.center), 3, (0, 255, 0))
         if not angles:
             angles = [momentum_angle]  # TODO: Issue warning?
         min_angle = min(angles)
@@ -383,8 +390,9 @@ def get_meter_value(fn: str) -> Dict[str, float]:
     if set(result.keys()) == {'1', '2', '3', '4'}:
         result['value'] = determine_value_by_roll_positions(
             result['1'], result['2'], result['3'], result['4'])
-    print(result)
-    cv2.imshow('debug: ' + fn.rsplit('/', 1)[-1], scale_image(debug, 2))
+    if DEBUG:
+        print(result)
+        cv2.imshow('debug: ' + fn.rsplit('/', 1)[-1], scale_image(debug, 2))
     return result
 
 
