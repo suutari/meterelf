@@ -1,0 +1,510 @@
+#!/usr/bin/env python3
+
+import functools
+import glob
+import math
+import os
+import random
+from typing import Any, Dict, Iterable, List, NamedTuple, Optional, Tuple
+
+import cv2
+import numpy
+
+# Type aliases
+
+Image = numpy.ndarray
+Point = Tuple[int, int]
+FloatPoint = Tuple[float, float]
+
+
+class HlsColor(numpy.ndarray):
+    def __new__(
+            cls,
+            hue: int = 0,
+            lightness: int = 0,
+            saturation: int = 0,
+    ) -> None:
+        assert 0 <= hue < 256
+        assert 0 <= lightness < 256
+        assert 0 <= saturation < 256
+        return super().__new__(cls, 3, dtype=numpy.uint8, buffer=numpy.array(
+            [hue, lightness, saturation], dtype=numpy.uint8))
+
+    def __repr__(self):
+        return '{name}({hue}, {lightness}, {saturation})'.format(
+            name=type(self).__name__,
+            hue=self.hue, lightness=self.lightness, saturation=self.saturation)
+    
+    @property
+    def hue(self) -> int:
+        return self[0]
+
+    @property
+    def lightness(self) -> int:
+        return self[1]
+
+    @property
+    def saturation(self) -> int:
+        return self[2]
+
+    def get_range(self, color_range):
+        min_color = HlsColor(
+            max(int(self.hue) - int(color_range.hue), 0),
+            max(int(self.lightness) - int(color_range.lightness), 0),
+            max(int(self.saturation) - int(color_range.saturation), 0))
+        max_color = HlsColor(
+            min(int(self.hue) + int(color_range.hue), 255),
+            min(int(self.lightness) + int(color_range.lightness), 255),
+            min(int(self.saturation) + int(color_range.saturation), 255))
+        return (min_color, max_color)
+
+
+# Types
+
+class Rect(NamedTuple):
+    top_left: Point
+    bottom_right: Point
+    
+
+class TemplateMatchResult(NamedTuple):
+    rect: Rect
+    max_val: float
+
+
+DATA_DIR = os.path.abspath(os.path.dirname(__file__))
+
+IMAGE_GLOB = '/home/tuomas/water-meter/2018*.jpg'
+
+METER_RECT = Rect(top_left=(50, 160), bottom_right=(300, 410))
+METER_COORDS = METER_RECT.top_left + METER_RECT.bottom_right
+
+ROLLS_FILE = os.path.join(DATA_DIR, 'rolls_gray.png')
+ROLLS_MATCH_THRESHOLD = 30000000
+ROLLS_TEMPLATE_W = 188
+ROLLS_TEMPLATE_H = 119
+
+ROLL_S = [
+    os.path.join(DATA_DIR, x)
+    for x in ['speedroll_0.png', 'speedroll_1.png']
+]
+ROLL_4 = [
+    os.path.join(DATA_DIR, 'roll4_{}.png'.format(x))
+    for x in range(10)
+]
+
+#: Shift hue values by this amount when converting images to HLS
+DEFAULT_HUE_SHIFT = 128
+
+#: Color of the roll needles
+#:
+#: Note: The hue values in these colors are shifted by DEFAULT_HUE_SHIFT
+ROLL_COLOR_RANGE = HlsColor(12, 75, 55)
+NEEDLE_COLOR = HlsColor(125, 80, 130)
+NEEDLE_COLOR_RANGE = HlsColor(9, 45, 35)
+NEEDLE_DIST_FROM_ROLL_CENTER = 4
+NEEDLE_MASK_THICKNESS = 8
+NEEDLE_ANGLES_OF_ZERO = {  # degrees
+    4: -20.0,
+    3: -20.0,
+    2: -20.0,
+    1: -20.0,
+}
+
+
+NEGATIVE_MOMENTUM_ROLLS = {3}
+
+
+class RollCenter(NamedTuple):
+    center: FloatPoint
+    diameter: int
+
+
+class RollData(NamedTuple):
+    center: FloatPoint
+    mask: Image
+    circle_mask: Image
+
+
+ROLL_CENTERS  = [
+    RollCenter(center=(37.3, 63.4), diameter=14),
+    RollCenter(center=(94.5, 86.3), diameter=15),
+    RollCenter(center=(135.5, 71.5), diameter=13),
+    RollCenter(center=(160.9, 36.5), diameter=13),
+]
+
+
+_roll_data: Optional[List[RollData]] = None
+
+
+def get_roll_data() -> List[RollData]:
+    global _roll_data
+    #if _roll_data is None:
+    _roll_data = _get_roll_data()
+    return _roll_data
+
+
+def _get_roll_data() -> List[RollData]:
+    data_list = []
+    for roll_center in ROLL_CENTERS:
+        mask = numpy.zeros(
+            shape=(ROLLS_TEMPLATE_H, ROLLS_TEMPLATE_W),
+            dtype=numpy.uint8)
+        roll_radius = int(round(roll_center.diameter/2.0))
+        center = float_point_to_int(roll_center.center)
+        start_radius = roll_radius + NEEDLE_DIST_FROM_ROLL_CENTER
+        for i in [0, NEEDLE_MASK_THICKNESS - 1]:
+            cv2.circle(mask, center, start_radius + i, 255)
+        fill_mask = numpy.zeros(
+            (ROLLS_TEMPLATE_H + 2, ROLLS_TEMPLATE_W + 2), dtype=numpy.uint8)
+        fill_point = (center[0] + start_radius + 1, center[1])
+        cv2.floodFill(mask, fill_mask, fill_point, 255)
+        circle_mask = mask.copy()
+        cv2.floodFill(mask, fill_mask, center, 255)
+        data_list.append(RollData(roll_center.center, mask, circle_mask))
+    return data_list
+
+
+def convert_to_hls(image: Image, hue_shift=DEFAULT_HUE_SHIFT) -> Image:
+    unshifted_hls_image = cv2.cvtColor(image, cv2.COLOR_BGR2HLS_FULL)
+    return unshifted_hls_image + HlsColor(hue_shift, 0, 0)
+
+
+def convert_to_bgr(hls_image: Image, hue_shift=DEFAULT_HUE_SHIFT) -> Image:
+    shifted_hls_image  = hls_image - HlsColor(hue_shift, 0, 0)
+    return cv2.cvtColor(shifted_hls_image, cv2.COLOR_HLS2BGR_FULL)
+
+
+def find_roll_centers(n: int = 255) -> List[RollCenter]:
+    avg_meter = get_average_meter_image(n)
+    avg_meter_hls = convert_to_hls(avg_meter)
+
+    match_result = find_rolls(avg_meter_hls, '<average_image>')
+    rolls_hls = crop_rect(avg_meter_hls, match_result.rect)
+
+    needles_mask = get_needles_mask_by_color(rolls_hls)
+    (_bw, contours, _hier) = cv2.findContours(
+        needles_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
+    roll_centers = []
+    for contour in contours:
+        (center, size, angle) = cv2.fitEllipse(contour)
+        (height, width) = size
+        diameter = (width + height) / 2.0
+        if abs(height - width) / diameter > 0.2:
+            raise ValueError('Needle center not circle enough')
+        roll_centers.append(RollCenter(center, int(round(diameter))))
+    return sorted(roll_centers, key=(lambda x: x.center[0]))
+
+
+def float_point_to_int(point: FloatPoint) -> Point:
+    return tuple(int(round(i)) for i in point)
+
+
+def get_meter_image(filename: str) -> Image:
+    img = cv2.imread(filename)
+    return crop_meter(img)
+
+
+def crop_meter(img: Image) -> Image:
+    (x0, y0, x1, y1) = METER_COORDS
+    return img[y0:y1, x0:x1]
+
+
+def crop_rect(img: Image, rect: Rect) -> Image:
+    (x0, y0, x1, y1) = rect.top_left + rect.bottom_right
+    return img[y0:y1, x0:x1]
+
+
+def get_average_meter_image(n: int = 255) -> Image:
+    norm_images = get_random_norm_images(n)
+    norm_avg_img = calculate_average_of_norm_images(norm_images)
+    return denormalize_image(norm_avg_img)
+
+    
+def get_random_norm_images(n: int) -> List[Image]:
+    filenames = random.sample(get_image_filenames(), n)
+    return [normalize_image(get_meter_image_t(x)) for x in filenames]
+
+
+def get_meter_image_t(fn: str) -> Image:
+    meter_img = get_meter_image(fn)
+    meter_hls = convert_to_hls(meter_img)
+    rolls = find_rolls(meter_hls, fn)
+    tl = rolls.rect.top_left
+    m = numpy.float32([[1, 0, 30 - tl[0]], [0, 1, 116 - tl[1]]])
+    (h, w) = meter_img.shape[0:2]
+    return cv2.warpAffine(meter_img, m, (w, h))
+    
+
+def scale_image(img: Image, scale: int) -> Image:  #unused!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+    assert scale > 0
+    (h, w) = img.shape[0:2]
+    resized = cv2.resize(img, (w * scale, h * scale))
+    #return cv2.blur(resized, (scale - 1, scale - 1))
+    #return cv2.bilateralFilter(resized, -1, 10, scale + 2)
+    return resized
+
+
+def get_image_filenames() -> List[str]:
+    return glob.glob(IMAGE_GLOB)
+
+
+def normalize_image(img: Image) -> Image:
+    return img.astype(numpy.dtype('float64')) / 255.0
+
+
+def denormalize_image(img: Image) -> Image:
+    return ((img * 255.0) + 0.5).astype(numpy.dtype('uint8'))
+
+
+def calculate_average_of_norm_images(images: Iterable[Image]) -> Image:
+    img_iter = iter(images)
+    try:
+        img0 = next(img_iter)
+    except StopIteration:
+        raise ValueError("Cannot calculate average of empty sequence")
+    reduced = functools.reduce(_image_avg_reducer, img_iter, (img0, 2))
+    return reduced[0]
+
+
+def _image_avg_reducer(
+        prev: Tuple[Image, int],
+        img: Image,
+) -> Tuple[Image, int]:
+    (p_img, n) = prev
+    new_img = p_img * ((n - 1) / n) + (img / n)
+    return (new_img, n + 1)
+
+
+def test(n=10):
+    return [
+        process(x)
+        for x in glob.glob('/home/tuomas/water-meter/2018*.jpg')[:n]
+    ]
+
+
+def process(fn: str):
+    meter_img = get_meter_image(fn)
+    meter_hls = convert_to_hls(meter_img)
+    match_result = find_rolls(meter_hls, fn)
+    rolls_hls = crop_rect(meter_hls, match_result.rect)
+    needles_mask = get_needles_mask_by_color(rolls_hls)
+    result = {}
+    for (roll_name, masks) in get_roll_maps().items():
+        if roll_name not in {'1', '2', '4'}:
+            continue
+        d = {}
+        max_in_mask = 0
+        val = None
+        for (n, mask) in masks.items():
+            in_mask = numpy.sum(needles_mask & mask)
+            if in_mask > max_in_mask:
+                max_in_mask = in_mask
+                val = n
+            d[n] = in_mask
+        result[roll_name] = {'val': val, 'd': d}
+    return (meter_img, result)
+
+
+def get_rolls_hls(fn: str) -> Image:
+    meter_img = get_meter_image(fn)
+    meter_hls = convert_to_hls(meter_img)
+    match_result = find_rolls(meter_hls, fn)
+    rolls_hls = crop_rect(meter_hls, match_result.rect)
+    return rolls_hls
+
+
+def get_roll_color(rolls_hls: Image, roll_data: RollData) -> HlsColor:
+    (c_x, c_y) = roll_data.center
+    (x, y) = (int(c_x), int(c_y))
+    roll_core = crop_rect(rolls_hls, Rect((x - 2, y - 2), (x + 3, y + 3)))
+    return HlsColor(*(int(round(x)) for x in cv2.mean(roll_core)[0:3]))
+
+          
+def process2(fn: str):
+    print(fn)
+    return get_meter_value(fn)
+
+
+def get_meter_value(fn: str) -> Dict[str, float]:
+    rolls_hls = get_rolls_hls(fn)
+
+    debug = convert_to_bgr(rolls_hls)
+
+    result = {}
+    
+    for (i, roll_data) in enumerate(get_roll_data()):
+        roll_num = 4 - i
+        roll_color = get_roll_color(rolls_hls, roll_data)
+
+        needle_mask_orig = get_mask_by_color(rolls_hls, roll_color, ROLL_COLOR_RANGE)
+        kernel = numpy.ones((3, 3), numpy.uint8)
+        needle_mask_dilated = cv2.dilate(needle_mask_orig, kernel)
+        needle_mask_de = cv2.erode(needle_mask_dilated, kernel)
+
+        (_bw, contours, _hier) = cv2.findContours(
+            needle_mask_de & roll_data.mask,
+            cv2.RETR_EXTERNAL,
+            cv2.CHAIN_APPROX_NONE)
+        contour = sorted(contours, key=cv2.contourArea)[-1]
+        if cv2.contourArea(contour) > 100:
+            cv2.drawContours(debug, [contour], -1, (255, 255, 0), -1)
+            needle_mask = needle_mask_de.copy()
+            needle_mask.fill(0)
+            cv2.drawContours(needle_mask, [contour], -1, 255, -1)
+        else:
+            needle_mask = needle_mask_de
+
+        center = roll_data.center
+
+        needle_points = cv2.findNonZero(needle_mask_dilated & roll_data.mask)
+        if needle_points is None:
+            continue
+        
+        momentum_x = 0.0
+        momentum_y = 0.0
+        for needle_point in needle_points:
+            (x, y) = needle_point[0] - roll_data.center
+            momentum_x += (-1 if x < 0 else 1) * x**2
+            momentum_y += (-1 if y < 0 else 1) * y**2
+
+        mom_sign = -1 if roll_num in NEGATIVE_MOMENTUM_ROLLS else 1
+        momentum_vector = (mom_sign * momentum_x, mom_sign * momentum_y)
+        momentum_angle = get_angle_by_vector(momentum_vector)
+            
+        # DEBUG
+        mom_scale = math.sqrt(momentum_x ** 2 + momentum_y ** 2)
+        mom_x = center[0] + 20 * mom_sign * momentum_x / mom_scale
+        mom_y = center[1] + 20 * mom_sign * momentum_y / mom_scale
+        cv2.circle(debug, float_point_to_int((mom_x, mom_y)), 2, (0, 0, 255))
+
+        outer_points = cv2.findNonZero(needle_mask & roll_data.circle_mask)
+        if outer_points is None:
+            continue
+
+        angles = []
+        for outer_point in outer_points:
+            (x, y) = outer_point[0] - roll_data.center
+            cv2.circle(debug, tuple(outer_point[0]), 0, (0, 128, 128))
+            angle = get_angle_by_vector((x, y))
+            if angle is not None:
+                angle_dist_from_mom = min(
+                    abs(angle - momentum_angle),
+                    abs(abs(angle - momentum_angle) - 1))
+                if angle_dist_from_mom < 0.25:
+                    angles.append(angle)
+                    cv2.circle(debug, tuple(outer_point[0]), 0, (0, 255, 255))
+
+        cv2.circle(debug, float_point_to_int(roll_data.center), 3, (0, 255, 0))
+        if not angles:
+            raise Exception("Cannot find angle")
+        min_angle = min(angles)
+        angles_r = [
+            a if abs(a - min_angle) < 0.75 else a - 1
+            for a in angles]
+        if len(angles_r) >= 5:
+            cut_out = min(2, (len(angles_r) - 3) // 2)
+            center_angles = sorted(angles_r)[cut_out:-cut_out]
+        else:
+            center_angles = angles_r
+        angle = sum(center_angles) / len(center_angles)
+        angle_of_zero = NEEDLE_ANGLES_OF_ZERO[roll_num]
+        num_from_angle = (10 * angle - angle_of_zero / 360.0) % 10
+        num = int(round(num_from_angle)) % 10
+        result[str(roll_num)] = num_from_angle
+    if set(result.keys()) == {'1', '2', '3', '4'}:
+        result['value'] = determine_value_by_roll_positions(
+            result['1'], result['2'], result['3'], result['4'])
+    print(result)
+    cv2.imshow('debug', scale_image(debug, 2))
+    return result
+
+
+def determine_value_by_roll_positions(
+        r1: float,
+        r2: float,
+        r3: float,
+        r4: float,
+) -> float:
+    d1 = int(r1) + (1 if r1 % 1.0 > 0.5 and r2 < 2 else 0)
+    d2 = int(r2) + (1 if r2 % 1.0 > 0.5 and r3 < 2 else 0)
+    d3 = int(r3) + (1 if r3 % 1.0 > 0.5 and r4 < 2 else 0)
+    d4 = int(r4)
+    return (d1 * 100.0) + (d2 * 10.0) + (d3 * 1.0) + r4 / 10.0
+
+
+def get_angle_by_vector(vector: FloatPoint) -> Optional[float]:
+    (x, y) = vector
+    if x == 0 and y == 0:
+        return None
+    elif x > 0 and y == 0:
+        return 0.25
+    elif x < 0 and y == 0:
+        return 0.75
+
+    atan = math.atan(abs(x) / abs(y)) / (2 * math.pi)
+    if x >= 0 and y >= 0:
+        return 0.5 - atan
+    elif x >= 0 and y < 0:
+        return atan
+    elif x < 0 and y < 0:
+        return 1.0 - atan
+    else:
+        assert x < 0 and y >= 0
+        return 0.5 + atan
+
+
+def get_needles_mask_by_color(hls_image: Image) -> Image:
+    return get_mask_by_color(hls_image, NEEDLE_COLOR, NEEDLE_COLOR_RANGE)
+
+
+def get_mask_by_color(
+        hls_image: Image,
+        color: HlsColor,
+        color_range: HlsColor,
+) -> Image:
+    (color_min, color_max) =  color.get_range(color_range)
+    return cv2.inRange(hls_image, color_min, color_max)
+
+
+def get_roll_maps():
+    result = {}
+    roll_data = [('s', ROLL_S), ('4', ROLL_4)]
+    for (roll, filenames) in roll_data:
+        result[roll] = {}
+        for (n, fn) in enumerate(filenames):
+            img = cv2.imread(fn, cv2.IMREAD_UNCHANGED)
+            mask = cv2.split(img)[3]
+            result[roll][n] = mask
+    return result
+
+
+def find_rolls(img_hls: Image, fn: str) -> TemplateMatchResult:
+    template = get_rolls_template()
+
+    lightness = cv2.split(img_hls)[1]
+
+    match_result = match_template(lightness, template)
+
+    if match_result.max_val < ROLLS_MATCH_THRESHOLD:
+        raise ValueError('Rolls not found from {}'.format(fn))
+
+    return match_result
+
+
+rolls_template = None
+
+def get_rolls_template():
+    global rolls_template
+    if rolls_template is None:
+        rolls_template = cv2.imread(ROLLS_FILE, cv2.IMREAD_GRAYSCALE)
+    assert rolls_template.shape == (ROLLS_TEMPLATE_H, ROLLS_TEMPLATE_W)
+    return rolls_template
+
+
+def match_template(img: Image, template: Image) -> TemplateMatchResult:
+    (h, w) = template.shape[0:2]
+    res = cv2.matchTemplate(img, template, cv2.TM_CCOEFF)
+    (min_val, max_val, min_loc, max_loc) = cv2.minMaxLoc(res)
+    top_left = max_loc
+    bottom_right = (top_left[0] + w, top_left[1] + h)
+    return TemplateMatchResult(Rect(top_left, bottom_right), max_val)
