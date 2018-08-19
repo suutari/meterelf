@@ -98,10 +98,10 @@ NEEDLE_COLOR_RANGE = HlsColor(9, 45, 35)
 NEEDLE_DIST_FROM_ROLL_CENTER = 4
 NEEDLE_MASK_THICKNESS = 8
 NEEDLE_ANGLES_OF_ZERO = {  # degrees
-    4: -10.0,
-    3: -10.0,
-    2: -10.0,
-    1: -10.0,
+    4: -8.0,
+    3: -8.0,
+    2: -8.0,
+    1: -8.0,
 }
 
 
