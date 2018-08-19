@@ -137,9 +137,18 @@ ROLL_CENTERS  = [
 
 
 def main(argv=sys.argv):
-    filename = argv[1]
-    result = get_meter_value(filename)
-    print(result.get('value', 'unknown'))
+    filenames = argv[1:]
+    for filename in filenames:
+        print(filename, end='')
+        try:
+            result = get_meter_value(filename)
+        except Exception as error:
+            result = {'error': error}
+
+        value = result.get('value', 'UNKNOWN')
+        error = result.get('error')
+        error_str = ' {}'.format(error) if error else ''
+        print(': {}{}'.format(value, error_str))
 
 
 _roll_data: Optional[List[RollData]] = None
