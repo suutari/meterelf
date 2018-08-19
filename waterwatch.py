@@ -82,7 +82,7 @@ METER_RECT = Rect(top_left=(50, 160), bottom_right=(300, 410))
 METER_COORDS = METER_RECT.top_left + METER_RECT.bottom_right
 
 ROLLS_FILE = os.path.join(DATA_DIR, 'rolls_gray.png')
-ROLLS_MATCH_THRESHOLD = 30000000
+ROLLS_MATCH_THRESHOLD = 20000000
 ROLLS_TEMPLATE_W = 188
 ROLLS_TEMPLATE_H = 119
 
@@ -92,7 +92,7 @@ DEFAULT_HUE_SHIFT = 128
 #: Color of the roll needles
 #:
 #: Note: The hue values in these colors are shifted by DEFAULT_HUE_SHIFT
-ROLL_COLOR_RANGE = HlsColor(12, 75, 65)
+ROLL_COLOR_RANGE = HlsColor(12, 90, 70)
 NEEDLE_COLOR = HlsColor(125, 80, 130)
 NEEDLE_COLOR_RANGE = HlsColor(9, 45, 35)
 NEEDLE_DIST_FROM_ROLL_CENTER = 4
@@ -460,7 +460,8 @@ def find_rolls(img_hls: Image, fn: str) -> TemplateMatchResult:
     match_result = match_template(lightness, template)
 
     if match_result.max_val < ROLLS_MATCH_THRESHOLD:
-        raise ValueError('Rolls not found from {}'.format(fn))
+        raise ValueError('Rolls not found from {} (match val = {})'.format(
+            fn, match_result.max_val))
 
     return match_result
 
