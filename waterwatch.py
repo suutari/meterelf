@@ -435,18 +435,6 @@ def get_mask_by_color(
     return cv2.inRange(hls_image, color_min, color_max)
 
 
-def get_roll_maps():
-    result = {}
-    roll_data = [('s', ROLL_S), ('4', ROLL_4)]
-    for (roll, filenames) in roll_data:
-        result[roll] = {}
-        for (n, fn) in enumerate(filenames):
-            img = cv2.imread(fn, cv2.IMREAD_UNCHANGED)
-            mask = cv2.split(img)[3]
-            result[roll][n] = mask
-    return result
-
-
 def find_rolls(img_hls: Image, fn: str) -> TemplateMatchResult:
     template = get_rolls_template()
     lightness = cv2.split(img_hls)[1]
