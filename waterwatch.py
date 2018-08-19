@@ -86,15 +86,6 @@ ROLLS_MATCH_THRESHOLD = 30000000
 ROLLS_TEMPLATE_W = 188
 ROLLS_TEMPLATE_H = 119
 
-ROLL_S = [
-    os.path.join(DATA_DIR, x)
-    for x in ['speedroll_0.png', 'speedroll_1.png']
-]
-ROLL_4 = [
-    os.path.join(DATA_DIR, 'roll4_{}.png'.format(x))
-    for x in range(10)
-]
-
 #: Shift hue values by this amount when converting images to HLS
 DEFAULT_HUE_SHIFT = 128
 
