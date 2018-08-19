@@ -6,7 +6,7 @@ import math
 import os
 import random
 import sys
-from typing import Any, Dict, Iterable, List, NamedTuple, Optional, Tuple
+from typing import Dict, Iterable, List, NamedTuple, Optional, Tuple
 
 import cv2
 import numpy
@@ -37,7 +37,7 @@ class HlsColor(numpy.ndarray):
         return '{name}({hue}, {lightness}, {saturation})'.format(
             name=type(self).__name__,
             hue=self.hue, lightness=self.lightness, saturation=self.saturation)
-    
+
     @property
     def hue(self) -> int:
         return self[0]
@@ -67,7 +67,7 @@ class HlsColor(numpy.ndarray):
 class Rect(NamedTuple):
     top_left: Point
     bottom_right: Point
-    
+
 
 class TemplateMatchResult(NamedTuple):
     rect: Rect
@@ -145,6 +145,7 @@ def main(argv=sys.argv):
 
 _roll_data: Optional[List[RollData]] = None
 
+
 def get_roll_data() -> List[RollData]:
     global _roll_data
     if _roll_data is None:
@@ -179,7 +180,7 @@ def convert_to_hls(image: Image, hue_shift=DEFAULT_HUE_SHIFT) -> Image:
 
 
 def convert_to_bgr(hls_image: Image, hue_shift=DEFAULT_HUE_SHIFT) -> Image:
-    shifted_hls_image  = hls_image - HlsColor(hue_shift, 0, 0)
+    shifted_hls_image = hls_image - HlsColor(hue_shift, 0, 0)
     return cv2.cvtColor(shifted_hls_image, cv2.COLOR_HLS2BGR_FULL)
 
 
@@ -228,7 +229,7 @@ def get_average_meter_image(n: int = 255) -> Image:
     norm_avg_img = calculate_average_of_norm_images(norm_images)
     return denormalize_image(norm_avg_img)
 
-    
+
 def get_random_norm_images(n: int) -> List[Image]:
     filenames = random.sample(get_image_filenames(), n)
     return [normalize_image(get_meter_image_t(x)) for x in filenames]
@@ -246,7 +247,7 @@ def get_meter_image_t(fn: str) -> Image:
     m = numpy.float32([[1, 0, 30 - tl[0]], [0, 1, 116 - tl[1]]])
     (h, w) = meter_img.shape[0:2]
     return cv2.warpAffine(meter_img, m, (w, h))
-    
+
 
 def scale_image(img: Image, scale: int) -> Image:
     assert scale > 0
@@ -296,7 +297,7 @@ def get_roll_color(rolls_hls: Image, roll_data: RollData) -> HlsColor:
     roll_core = crop_rect(rolls_hls, Rect((x - 2, y - 2), (x + 3, y + 3)))
     return HlsColor(*(int(round(x)) for x in cv2.mean(roll_core)[0:3]))
 
-          
+
 def get_meter_value(fn: str) -> Dict[str, float]:
     rolls_hls = get_rolls_hls(fn)
 
@@ -304,12 +305,13 @@ def get_meter_value(fn: str) -> Dict[str, float]:
         debug = convert_to_bgr(rolls_hls)
 
     result = {}
-    
+
     for (i, roll_data) in enumerate(get_roll_data()):
         roll_num = 4 - i
         roll_color = get_roll_color(rolls_hls, roll_data)
 
-        needle_mask_orig = get_mask_by_color(rolls_hls, roll_color, ROLL_COLOR_RANGE)
+        needle_mask_orig = get_mask_by_color(
+            rolls_hls, roll_color, ROLL_COLOR_RANGE)
         kernel = numpy.ones((3, 3), numpy.uint8)
         needle_mask_dilated = cv2.dilate(needle_mask_orig, kernel)
         needle_mask_de = cv2.erode(needle_mask_dilated, kernel)
@@ -333,7 +335,7 @@ def get_meter_value(fn: str) -> Dict[str, float]:
         needle_points = cv2.findNonZero(needle_mask & roll_data.mask)
         if needle_points is None:
             continue
-        
+
         momentum_x = 0.0
         momentum_y = 0.0
         for needle_point in needle_points:
@@ -344,12 +346,13 @@ def get_meter_value(fn: str) -> Dict[str, float]:
         mom_sign = -1 if roll_num in NEGATIVE_MOMENTUM_ROLLS else 1
         momentum_vector = (mom_sign * momentum_x, mom_sign * momentum_y)
         momentum_angle = get_angle_by_vector(momentum_vector)
-            
+
         if DEBUG:
             mom_scale = math.sqrt(momentum_x ** 2 + momentum_y ** 2)
             mom_x = center[0] + 24 * mom_sign * momentum_x / mom_scale
             mom_y = center[1] + 24 * mom_sign * momentum_y / mom_scale
-            cv2.circle(debug, float_point_to_int((mom_x, mom_y)), 4, (0, 0, 255))
+            cv2.circle(
+                debug, float_point_to_int((mom_x, mom_y)), 4, (0, 0, 255))
 
         outer_points = cv2.findNonZero(needle_mask & roll_data.circle_mask)
         if outer_points is None:
@@ -368,10 +371,12 @@ def get_meter_value(fn: str) -> Dict[str, float]:
                 if angle_dist_from_mom < 0.15:
                     angles.append(angle)
                     if DEBUG:
-                        cv2.circle(debug, tuple(outer_point[0]), 0, (0, 255, 255))
+                        cv2.circle(
+                            debug, tuple(outer_point[0]), 0, (0, 255, 255))
 
         if DEBUG:
-            cv2.circle(debug, float_point_to_int(roll_data.center), 3, (0, 255, 0))
+            cv2.circle(
+                debug, float_point_to_int(roll_data.center), 3, (0, 255, 0))
         if not angles:
             raise ValueError(
                 'Cannot determine angle for roll {}'.format(roll_num))
@@ -387,7 +392,6 @@ def get_meter_value(fn: str) -> Dict[str, float]:
         angle = sum(center_angles) / len(center_angles)
         angle_of_zero = NEEDLE_ANGLES_OF_ZERO[roll_num]
         num_from_angle = (10 * (angle - angle_of_zero / 360.0)) % 10
-        num = int(round(num_from_angle)) % 10
         result[str(roll_num)] = num_from_angle
     if set(result.keys()) == {'1', '2', '3', '4'}:
         result['value'] = determine_value_by_roll_positions(
@@ -446,7 +450,7 @@ def get_mask_by_color(
         color: HlsColor,
         color_range: HlsColor,
 ) -> Image:
-    (color_min, color_max) =  color.get_range(color_range)
+    (color_min, color_max) = color.get_range(color_range)
     return cv2.inRange(hls_image, color_min, color_max)
 
 
@@ -462,6 +466,7 @@ def find_rolls(img_hls: Image, fn: str) -> TemplateMatchResult:
 
 
 _rolls_template = None
+
 
 def get_rolls_template():
     global _rolls_template
