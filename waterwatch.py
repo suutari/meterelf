@@ -136,10 +136,11 @@ def main(argv=sys.argv):
         except Exception as error:
             result = {'error': error}
 
-        value = result.get('value', 'UNKNOWN')
+        value = result.get('value')
         error = result.get('error')
+        value_str = '{:06.2f}'.format(value) if value else 'UNKNOWN'
         error_str = ' {}'.format(error) if error else ''
-        print(': {}{}'.format(value, error_str))
+        print(': {}{}'.format(value_str, error_str))
 
 
 _roll_data: Optional[List[RollData]] = None
