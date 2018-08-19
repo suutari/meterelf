@@ -330,7 +330,7 @@ def get_meter_value(fn: str) -> Dict[str, float]:
 
         center = roll_data.center
 
-        needle_points = cv2.findNonZero(needle_mask_dilated & roll_data.mask)
+        needle_points = cv2.findNonZero(needle_mask & roll_data.mask)
         if needle_points is None:
             continue
         
@@ -347,9 +347,9 @@ def get_meter_value(fn: str) -> Dict[str, float]:
             
         if DEBUG:
             mom_scale = math.sqrt(momentum_x ** 2 + momentum_y ** 2)
-            mom_x = center[0] + 20 * mom_sign * momentum_x / mom_scale
-            mom_y = center[1] + 20 * mom_sign * momentum_y / mom_scale
-            cv2.circle(debug, float_point_to_int((mom_x, mom_y)), 2, (0, 0, 255))
+            mom_x = center[0] + 24 * mom_sign * momentum_x / mom_scale
+            mom_y = center[1] + 24 * mom_sign * momentum_y / mom_scale
+            cv2.circle(debug, float_point_to_int((mom_x, mom_y)), 4, (0, 0, 255))
 
         outer_points = cv2.findNonZero(needle_mask & roll_data.circle_mask)
         if outer_points is None:
@@ -403,10 +403,15 @@ def determine_value_by_roll_positions(
         r3: float,
         r4: float,
 ) -> float:
-    d1 = int(r1) + (1 if r1 % 1.0 > 0.5 and r2 < 2 else 0)
-    d2 = int(r2) + (1 if r2 % 1.0 > 0.5 and r3 < 2 else 0)
-    d3 = int(r3) + (1 if r3 % 1.0 > 0.5 and r4 < 2 else 0)
-    d4 = int(r4)
+    d3 = (int(r3)
+          + (1 if r3 % 1.0 > 0.5 and r4 <= 2 else 0)
+          - (1 if r3 % 1.0 < 0.5 and r4 >= 8 else 0)) % 10
+    d2 = (int(r2)
+          + (1 if r2 % 1.0 > 0.5 and d3 <= 2 else 0)
+          - (1 if r2 % 1.0 < 0.5 and d3 >= 8 else 0)) % 10
+    d1 = (int(r1)
+          + (1 if r1 % 1.0 > 0.5 and d2 <= 2 else 0)
+          - (1 if r1 % 1.0 < 0.5 and d2 >= 8 else 0)) % 10
     return (d1 * 100.0) + (d2 * 10.0) + (d3 * 1.0) + r4 / 10.0
 
 
