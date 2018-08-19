@@ -5,6 +5,7 @@ import glob
 import math
 import os
 import random
+import sys
 from typing import Any, Dict, Iterable, List, NamedTuple, Optional, Tuple
 
 import cv2
@@ -133,13 +134,18 @@ ROLL_CENTERS  = [
 ]
 
 
-_roll_data: Optional[List[RollData]] = None
+def main(argv=sys.argv):
+    filename = argv[1]
+    result = get_meter_value(filename)
+    print(result.get('value', 'unknown'))
 
+
+_roll_data: Optional[List[RollData]] = None
 
 def get_roll_data() -> List[RollData]:
     global _roll_data
-    #if _roll_data is None:
-    _roll_data = _get_roll_data()
+    if _roll_data is None:
+        _roll_data = _get_roll_data()
     return _roll_data
 
 
@@ -225,6 +231,10 @@ def get_random_norm_images(n: int) -> List[Image]:
     return [normalize_image(get_meter_image_t(x)) for x in filenames]
 
 
+def get_image_filenames() -> List[str]:
+    return glob.glob(IMAGE_GLOB)
+
+
 def get_meter_image_t(fn: str) -> Image:
     meter_img = get_meter_image(fn)
     meter_hls = convert_to_hls(meter_img)
@@ -235,17 +245,11 @@ def get_meter_image_t(fn: str) -> Image:
     return cv2.warpAffine(meter_img, m, (w, h))
     
 
-def scale_image(img: Image, scale: int) -> Image:  #unused!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+def scale_image(img: Image, scale: int) -> Image:
     assert scale > 0
     (h, w) = img.shape[0:2]
     resized = cv2.resize(img, (w * scale, h * scale))
-    #return cv2.blur(resized, (scale - 1, scale - 1))
-    #return cv2.bilateralFilter(resized, -1, 10, scale + 2)
     return resized
-
-
-def get_image_filenames() -> List[str]:
-    return glob.glob(IMAGE_GLOB)
 
 
 def normalize_image(img: Image) -> Image:
@@ -275,36 +279,6 @@ def _image_avg_reducer(
     return (new_img, n + 1)
 
 
-def test(n=10):
-    return [
-        process(x)
-        for x in glob.glob('/home/tuomas/water-meter/2018*.jpg')[:n]
-    ]
-
-
-def process(fn: str):
-    meter_img = get_meter_image(fn)
-    meter_hls = convert_to_hls(meter_img)
-    match_result = find_rolls(meter_hls, fn)
-    rolls_hls = crop_rect(meter_hls, match_result.rect)
-    needles_mask = get_needles_mask_by_color(rolls_hls)
-    result = {}
-    for (roll_name, masks) in get_roll_maps().items():
-        if roll_name not in {'1', '2', '4'}:
-            continue
-        d = {}
-        max_in_mask = 0
-        val = None
-        for (n, mask) in masks.items():
-            in_mask = numpy.sum(needles_mask & mask)
-            if in_mask > max_in_mask:
-                max_in_mask = in_mask
-                val = n
-            d[n] = in_mask
-        result[roll_name] = {'val': val, 'd': d}
-    return (meter_img, result)
-
-
 def get_rolls_hls(fn: str) -> Image:
     meter_img = get_meter_image(fn)
     meter_hls = convert_to_hls(meter_img)
@@ -320,11 +294,6 @@ def get_roll_color(rolls_hls: Image, roll_data: RollData) -> HlsColor:
     return HlsColor(*(int(round(x)) for x in cv2.mean(roll_core)[0:3]))
 
           
-def process2(fn: str):
-    print(fn)
-    return get_meter_value(fn)
-
-
 def get_meter_value(fn: str) -> Dict[str, float]:
     rolls_hls = get_rolls_hls(fn)
 
@@ -480,9 +449,7 @@ def get_roll_maps():
 
 def find_rolls(img_hls: Image, fn: str) -> TemplateMatchResult:
     template = get_rolls_template()
-
     lightness = cv2.split(img_hls)[1]
-
     match_result = match_template(lightness, template)
 
     if match_result.max_val < ROLLS_MATCH_THRESHOLD:
@@ -491,14 +458,14 @@ def find_rolls(img_hls: Image, fn: str) -> TemplateMatchResult:
     return match_result
 
 
-rolls_template = None
+_rolls_template = None
 
 def get_rolls_template():
-    global rolls_template
-    if rolls_template is None:
-        rolls_template = cv2.imread(ROLLS_FILE, cv2.IMREAD_GRAYSCALE)
-    assert rolls_template.shape == (ROLLS_TEMPLATE_H, ROLLS_TEMPLATE_W)
-    return rolls_template
+    global _rolls_template
+    if _rolls_template is None:
+        _rolls_template = cv2.imread(ROLLS_FILE, cv2.IMREAD_GRAYSCALE)
+    assert _rolls_template.shape == (ROLLS_TEMPLATE_H, ROLLS_TEMPLATE_W)
+    return _rolls_template
 
 
 def match_template(img: Image, template: Image) -> TemplateMatchResult:
@@ -508,3 +475,7 @@ def match_template(img: Image, template: Image) -> TemplateMatchResult:
     top_left = max_loc
     bottom_right = (top_left[0] + w, top_left[1] + h)
     return TemplateMatchResult(Rect(top_left, bottom_right), max_val)
+
+
+if __name__ == '__main__':
+    main()
