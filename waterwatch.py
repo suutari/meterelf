@@ -365,7 +365,7 @@ def get_meter_value(fn: str) -> Dict[str, float]:
                 angle_dist_from_mom = min(
                     abs(angle - momentum_angle),
                     abs(abs(angle - momentum_angle) - 1))
-                if angle_dist_from_mom < 0.25:
+                if angle_dist_from_mom < 0.15:
                     angles.append(angle)
                     if DEBUG:
                         cv2.circle(debug, tuple(outer_point[0]), 0, (0, 255, 255))
@@ -373,7 +373,8 @@ def get_meter_value(fn: str) -> Dict[str, float]:
         if DEBUG:
             cv2.circle(debug, float_point_to_int(roll_data.center), 3, (0, 255, 0))
         if not angles:
-            angles = [momentum_angle]  # TODO: Issue warning?
+            raise ValueError(
+                'Cannot determine angle for roll {}'.format(roll_num))
         min_angle = min(angles)
         angles_r = [
             a if abs(a - min_angle) < 0.75 else a - 1
