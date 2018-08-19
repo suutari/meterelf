@@ -98,16 +98,16 @@ DEFAULT_HUE_SHIFT = 128
 #: Color of the roll needles
 #:
 #: Note: The hue values in these colors are shifted by DEFAULT_HUE_SHIFT
-ROLL_COLOR_RANGE = HlsColor(12, 75, 55)
+ROLL_COLOR_RANGE = HlsColor(12, 75, 65)
 NEEDLE_COLOR = HlsColor(125, 80, 130)
 NEEDLE_COLOR_RANGE = HlsColor(9, 45, 35)
 NEEDLE_DIST_FROM_ROLL_CENTER = 4
 NEEDLE_MASK_THICKNESS = 8
 NEEDLE_ANGLES_OF_ZERO = {  # degrees
-    4: -20.0,
-    3: -20.0,
-    2: -20.0,
-    1: -20.0,
+    4: -10.0,
+    3: -10.0,
+    2: -10.0,
+    1: -10.0,
 }
 
 
@@ -396,7 +396,7 @@ def get_meter_value(fn: str) -> Dict[str, float]:
 
         cv2.circle(debug, float_point_to_int(roll_data.center), 3, (0, 255, 0))
         if not angles:
-            raise Exception("Cannot find angle")
+            angles = [momentum_angle]  # TODO: Issue warning?
         min_angle = min(angles)
         angles_r = [
             a if abs(a - min_angle) < 0.75 else a - 1
@@ -408,14 +408,14 @@ def get_meter_value(fn: str) -> Dict[str, float]:
             center_angles = angles_r
         angle = sum(center_angles) / len(center_angles)
         angle_of_zero = NEEDLE_ANGLES_OF_ZERO[roll_num]
-        num_from_angle = (10 * angle - angle_of_zero / 360.0) % 10
+        num_from_angle = (10 * (angle - angle_of_zero / 360.0)) % 10
         num = int(round(num_from_angle)) % 10
         result[str(roll_num)] = num_from_angle
     if set(result.keys()) == {'1', '2', '3', '4'}:
         result['value'] = determine_value_by_roll_positions(
             result['1'], result['2'], result['3'], result['4'])
     print(result)
-    cv2.imshow('debug', scale_image(debug, 2))
+    cv2.imshow('debug: ' + fn.rsplit('/', 1)[-1], scale_image(debug, 2))
     return result
 
 
