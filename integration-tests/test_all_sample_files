@@ -7,6 +7,8 @@ base=$mydir/test_all_sample_files
 cd "$mydir/.."
 files=$(ls -1 sample-files/*.jpg | sort)
 
+echo "Testing with $(echo "$files" | wc -l) files"
+
 outdir=$(mktemp -d -t waterwatch_test.XXXXXX)
 
 # Don't stop on errors
@@ -29,3 +31,5 @@ rm -fr "$outdir"
 test "$exit_code" = "0"
 test "$diff_result1" = "0"
 test "$diff_result2" = "0"
+
+echo "PASSED"
