@@ -1,0 +1,31 @@
+#!/bin/sh
+set -e
+
+mydir=$(cd $(dirname "$0") && pwd)
+base=$mydir/test_all_sample_files
+
+cd "$mydir/.."
+files=$(ls -1 sample-files/*.jpg | sort)
+
+outdir=$(mktemp -d -t waterwatch_test.XXXXXX)
+
+# Don't stop on errors
+set +e
+
+./waterwatch.py $files >"$outdir/stdout" 2>"$outdir/stderr"
+exit_code=$?
+
+diff -u "$base.expected_stdout" "$outdir/stdout"
+diff_result1=$?
+
+diff -u "$base.expected_stderr" "$outdir/stderr"
+diff_result2=$?
+
+# Set back stopping on errors
+set -e
+
+rm -fr "$outdir"
+
+test "$exit_code" = "0"
+test "$diff_result1" = "0"
+test "$diff_result2" = "0"
