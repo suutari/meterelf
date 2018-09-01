@@ -136,6 +136,8 @@ def main(argv=sys.argv):
             result = get_meter_value(filename)
         except Exception as error:
             result = {'error': error}
+            if DEBUG:
+                raise
 
         value = result.get('value')
         error = result.get('error')
