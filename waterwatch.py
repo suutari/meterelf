@@ -19,7 +19,13 @@ Image = numpy.ndarray
 Point = Tuple[int, int]
 FloatPoint = Tuple[float, float]
 
-DEBUG = False
+DEBUG = {
+    x for x in os.getenv('DEBUG', '').replace(',', ' ').split()
+    if x.lower() not in {'0', 'no', 'off', 'false'}
+}
+
+if 'all' in DEBUG:
+    DEBUG = {'masks'}
 
 
 class HlsColor(numpy.ndarray):
@@ -164,16 +170,29 @@ def _get_dial_data() -> Dict[str, DialData]:
             dtype=numpy.uint8)
         dial_radius = int(round(dial_center.diameter/2.0))
         center = float_point_to_int(dial_center.center)
+
+        # Draw two circles to the mask image
         start_radius = dial_radius + NEEDLE_DIST_FROM_DIAL_CENTER
         for i in [0, NEEDLE_MASK_THICKNESS - 1]:
             cv2.circle(mask, center, start_radius + i, 255)
+
+        # Fill the area between the two circles and save result to
+        # circle_mask
         fill_mask = numpy.zeros(
-            (DIALS_TEMPLATE_H + 2, DIALS_TEMPLATE_W + 2), dtype=numpy.uint8)
+            (mask.shape[0] + 2, mask.shape[1] + 2), dtype=numpy.uint8)
         fill_point = (center[0] + start_radius + 1, center[1])
         cv2.floodFill(mask, fill_mask, fill_point, 255)
         circle_mask = mask.copy()
+
+        # Fill also the center circle in the mask image
         cv2.floodFill(mask, fill_mask, center, 255)
         result[name] = DialData(dial_center.center, mask, circle_mask)
+
+        if 'masks' in DEBUG:
+            cv2.imshow('mask of ' + name, mask)
+            cv2.imshow('circle_mask of ' + name, circle_mask)
+    if 'masks' in DEBUG:
+        cv2.waitKey(0)
     return result
 
 
