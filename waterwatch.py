@@ -83,21 +83,21 @@ IMAGE_GLOB = '/home/tuomas/water-meter/2018*.jpg'
 METER_RECT = Rect(top_left=(50, 160), bottom_right=(300, 410))
 METER_COORDS = METER_RECT.top_left + METER_RECT.bottom_right
 
-ROLLS_FILE = os.path.join(DATA_DIR, 'rolls_gray.png')
-ROLLS_MATCH_THRESHOLD = 20000000
-ROLLS_TEMPLATE_W = 188
-ROLLS_TEMPLATE_H = 119
+DIALS_FILE = os.path.join(DATA_DIR, 'dials_gray.png')
+DIALS_MATCH_THRESHOLD = 20000000
+DIALS_TEMPLATE_W = 188
+DIALS_TEMPLATE_H = 119
 
 #: Shift hue values by this amount when converting images to HLS
 DEFAULT_HUE_SHIFT = 128
 
-#: Color of the roll needles
+#: Color of the dial needles
 #:
 #: Note: The hue values in these colors are shifted by DEFAULT_HUE_SHIFT
-ROLL_COLOR_RANGE = HlsColor(12, 90, 70)
+DIAL_COLOR_RANGE = HlsColor(12, 90, 70)
 NEEDLE_COLOR = HlsColor(125, 80, 130)
 NEEDLE_COLOR_RANGE = HlsColor(9, 45, 35)
-NEEDLE_DIST_FROM_ROLL_CENTER = 4
+NEEDLE_DIST_FROM_DIAL_CENTER = 4
 NEEDLE_MASK_THICKNESS = 8
 NEEDLE_ANGLES_OF_ZERO = {  # degrees
     4: -8.0,
@@ -107,25 +107,25 @@ NEEDLE_ANGLES_OF_ZERO = {  # degrees
 }
 
 
-NEGATIVE_MOMENTUM_ROLLS = {3}
+NEGATIVE_MOMENTUM_DIALS = {3}
 
 
-class RollCenter(NamedTuple):
+class DialCenter(NamedTuple):
     center: FloatPoint
     diameter: int
 
 
-class RollData(NamedTuple):
+class DialData(NamedTuple):
     center: FloatPoint
     mask: Image
     circle_mask: Image
 
 
-ROLL_CENTERS  = [
-    RollCenter(center=(37.3, 63.4), diameter=14),
-    RollCenter(center=(94.5, 86.3), diameter=15),
-    RollCenter(center=(135.5, 71.5), diameter=13),
-    RollCenter(center=(160.9, 36.5), diameter=13),
+DIAL_CENTERS  = [
+    DialCenter(center=(37.3, 63.4), diameter=14),
+    DialCenter(center=(94.5, 86.3), diameter=15),
+    DialCenter(center=(135.5, 71.5), diameter=13),
+    DialCenter(center=(160.9, 36.5), diameter=13),
 ]
 
 
@@ -145,34 +145,34 @@ def main(argv=sys.argv):
         print(': {}{}'.format(value_str, error_str))
 
 
-_roll_data: Optional[List[RollData]] = None
+_dial_data: Optional[List[DialData]] = None
 
 
-def get_roll_data() -> List[RollData]:
-    global _roll_data
-    if _roll_data is None:
-        _roll_data = _get_roll_data()
-    return _roll_data
+def get_dial_data() -> List[DialData]:
+    global _dial_data
+    if _dial_data is None:
+        _dial_data = _get_dial_data()
+    return _dial_data
 
 
-def _get_roll_data() -> List[RollData]:
+def _get_dial_data() -> List[DialData]:
     data_list = []
-    for roll_center in ROLL_CENTERS:
+    for dial_center in DIAL_CENTERS:
         mask = numpy.zeros(
-            shape=(ROLLS_TEMPLATE_H, ROLLS_TEMPLATE_W),
+            shape=(DIALS_TEMPLATE_H, DIALS_TEMPLATE_W),
             dtype=numpy.uint8)
-        roll_radius = int(round(roll_center.diameter/2.0))
-        center = float_point_to_int(roll_center.center)
-        start_radius = roll_radius + NEEDLE_DIST_FROM_ROLL_CENTER
+        dial_radius = int(round(dial_center.diameter/2.0))
+        center = float_point_to_int(dial_center.center)
+        start_radius = dial_radius + NEEDLE_DIST_FROM_DIAL_CENTER
         for i in [0, NEEDLE_MASK_THICKNESS - 1]:
             cv2.circle(mask, center, start_radius + i, 255)
         fill_mask = numpy.zeros(
-            (ROLLS_TEMPLATE_H + 2, ROLLS_TEMPLATE_W + 2), dtype=numpy.uint8)
+            (DIALS_TEMPLATE_H + 2, DIALS_TEMPLATE_W + 2), dtype=numpy.uint8)
         fill_point = (center[0] + start_radius + 1, center[1])
         cv2.floodFill(mask, fill_mask, fill_point, 255)
         circle_mask = mask.copy()
         cv2.floodFill(mask, fill_mask, center, 255)
-        data_list.append(RollData(roll_center.center, mask, circle_mask))
+        data_list.append(DialData(dial_center.center, mask, circle_mask))
     return data_list
 
 
@@ -186,37 +186,37 @@ def convert_to_bgr(hls_image: Image, hue_shift=DEFAULT_HUE_SHIFT) -> Image:
     return cv2.cvtColor(shifted_hls_image, cv2.COLOR_HLS2BGR_FULL)
 
 
-def find_roll_centers(
+def find_dial_centers(
         files: Union[int, Iterable[str]] = 255,
-) -> List[RollCenter]:
+) -> List[DialCenter]:
     avg_meter = get_average_meter_image(get_files(files))
-    return find_roll_centers_from_image(avg_meter)
+    return find_dial_centers_from_image(avg_meter)
 
 
-def find_roll_centers_from_image(avg_meter: Image) -> List[RollCenter]:
+def find_dial_centers_from_image(avg_meter: Image) -> List[DialCenter]:
     avg_meter_hls = convert_to_hls(avg_meter)
 
-    match_result = find_rolls(avg_meter_hls, '<average_image>')
-    rolls_hls = crop_rect(avg_meter_hls, match_result.rect)
+    match_result = find_dials(avg_meter_hls, '<average_image>')
+    dials_hls = crop_rect(avg_meter_hls, match_result.rect)
 
-    needles_mask = get_needles_mask_by_color(rolls_hls)
+    needles_mask = get_needles_mask_by_color(dials_hls)
     if DEBUG:
-        debug_img = convert_to_bgr(rolls_hls)
+        debug_img = convert_to_bgr(dials_hls)
         color_mask = cv2.merge((needles_mask, needles_mask, needles_mask * 0))
         debug_img = cv2.addWeighted(debug_img, 1 ,color_mask, 0.50, 0)
         cv2.imshow('debug', debug_img)
         cv2.waitKey(0)
     (_bw, contours, _hier) = cv2.findContours(
         needles_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
-    roll_centers = []
+    dial_centers = []
     for contour in contours:
         (center, size, angle) = cv2.fitEllipse(contour)
         (height, width) = size
         diameter = (width + height) / 2.0
         if abs(height - width) / diameter > 0.2:
             raise ValueError('Needle center not circle enough')
-        roll_centers.append(RollCenter(center, int(round(diameter))))
-    return sorted(roll_centers, key=(lambda x: x.center[0]))
+        dial_centers.append(DialCenter(center, int(round(diameter))))
+    return sorted(dial_centers, key=(lambda x: x.center[0]))
 
 
 def get_files(files: Union[int, Iterable[str]] = 255) -> Iterable[str]:
@@ -261,8 +261,8 @@ def get_image_filenames() -> List[str]:
 def get_meter_image_t(fn: str) -> Image:
     meter_img = get_meter_image(fn)
     meter_hls = convert_to_hls(meter_img)
-    rolls = find_rolls(meter_hls, fn)
-    tl = rolls.rect.top_left
+    dials = find_dials(meter_hls, fn)
+    tl = dials.rect.top_left
     m = numpy.float32([[1, 0, 30 - tl[0]], [0, 1, 116 - tl[1]]])
     (h, w) = meter_img.shape[0:2]
     return cv2.warpAffine(meter_img, m, (w, h))
@@ -302,41 +302,41 @@ def _image_avg_reducer(
     return (new_img, n + 1)
 
 
-def get_rolls_hls(fn: str) -> Image:
+def get_dials_hls(fn: str) -> Image:
     meter_img = get_meter_image(fn)
     meter_hls = convert_to_hls(meter_img)
-    match_result = find_rolls(meter_hls, fn)
-    rolls_hls = crop_rect(meter_hls, match_result.rect)
-    return rolls_hls
+    match_result = find_dials(meter_hls, fn)
+    dials_hls = crop_rect(meter_hls, match_result.rect)
+    return dials_hls
 
 
-def get_roll_color(rolls_hls: Image, roll_data: RollData) -> HlsColor:
-    (c_x, c_y) = roll_data.center
+def get_dial_color(dials_hls: Image, dial_data: DialData) -> HlsColor:
+    (c_x, c_y) = dial_data.center
     (x, y) = (int(c_x), int(c_y))
-    roll_core = crop_rect(rolls_hls, Rect((x - 2, y - 2), (x + 3, y + 3)))
-    return HlsColor(*(int(round(x)) for x in cv2.mean(roll_core)[0:3]))
+    dial_core = crop_rect(dials_hls, Rect((x - 2, y - 2), (x + 3, y + 3)))
+    return HlsColor(*(int(round(x)) for x in cv2.mean(dial_core)[0:3]))
 
 
 def get_meter_value(fn: str) -> Dict[str, float]:
-    rolls_hls = get_rolls_hls(fn)
+    dials_hls = get_dials_hls(fn)
 
     if DEBUG:
-        debug = convert_to_bgr(rolls_hls)
+        debug = convert_to_bgr(dials_hls)
 
     result = {}
 
-    for (i, roll_data) in enumerate(get_roll_data()):
-        roll_num = 4 - i
-        roll_color = get_roll_color(rolls_hls, roll_data)
+    for (i, dial_data) in enumerate(get_dial_data()):
+        dial_num = 4 - i
+        dial_color = get_dial_color(dials_hls, dial_data)
 
         needle_mask_orig = get_mask_by_color(
-            rolls_hls, roll_color, ROLL_COLOR_RANGE)
+            dials_hls, dial_color, DIAL_COLOR_RANGE)
         kernel = numpy.ones((3, 3), numpy.uint8)
         needle_mask_dilated = cv2.dilate(needle_mask_orig, kernel)
         needle_mask_de = cv2.erode(needle_mask_dilated, kernel)
 
         (_bw, contours, _hier) = cv2.findContours(
-            needle_mask_de & roll_data.mask,
+            needle_mask_de & dial_data.mask,
             cv2.RETR_EXTERNAL,
             cv2.CHAIN_APPROX_NONE)
         contour = sorted(contours, key=cv2.contourArea)[-1]
@@ -349,20 +349,20 @@ def get_meter_value(fn: str) -> Dict[str, float]:
         else:
             needle_mask = needle_mask_de
 
-        center = roll_data.center
+        center = dial_data.center
 
-        needle_points = cv2.findNonZero(needle_mask & roll_data.mask)
+        needle_points = cv2.findNonZero(needle_mask & dial_data.mask)
         if needle_points is None:
             continue
 
         momentum_x = 0.0
         momentum_y = 0.0
         for needle_point in needle_points:
-            (x, y) = needle_point[0] - roll_data.center
+            (x, y) = needle_point[0] - dial_data.center
             momentum_x += (-1 if x < 0 else 1) * x**2
             momentum_y += (-1 if y < 0 else 1) * y**2
 
-        mom_sign = -1 if roll_num in NEGATIVE_MOMENTUM_ROLLS else 1
+        mom_sign = -1 if dial_num in NEGATIVE_MOMENTUM_DIALS else 1
         momentum_vector = (mom_sign * momentum_x, mom_sign * momentum_y)
         momentum_angle = get_angle_by_vector(momentum_vector)
 
@@ -373,13 +373,13 @@ def get_meter_value(fn: str) -> Dict[str, float]:
             cv2.circle(
                 debug, float_point_to_int((mom_x, mom_y)), 4, (0, 0, 255))
 
-        outer_points = cv2.findNonZero(needle_mask & roll_data.circle_mask)
+        outer_points = cv2.findNonZero(needle_mask & dial_data.circle_mask)
         if outer_points is None:
             continue
 
         angles = []
         for outer_point in outer_points:
-            (x, y) = outer_point[0] - roll_data.center
+            (x, y) = outer_point[0] - dial_data.center
             if DEBUG:
                 cv2.circle(debug, tuple(outer_point[0]), 0, (0, 128, 128))
             angle = get_angle_by_vector((x, y))
@@ -395,10 +395,10 @@ def get_meter_value(fn: str) -> Dict[str, float]:
 
         if DEBUG:
             cv2.circle(
-                debug, float_point_to_int(roll_data.center), 3, (0, 255, 0))
+                debug, float_point_to_int(dial_data.center), 3, (0, 255, 0))
         if not angles:
             raise ValueError(
-                'Cannot determine angle for roll {}'.format(roll_num))
+                'Cannot determine angle for dial {}'.format(dial_num))
         min_angle = min(angles)
         angles_r = [
             a if abs(a - min_angle) < 0.75 else a - 1
@@ -409,11 +409,11 @@ def get_meter_value(fn: str) -> Dict[str, float]:
         else:
             center_angles = angles_r
         angle = sum(center_angles) / len(center_angles)
-        angle_of_zero = NEEDLE_ANGLES_OF_ZERO[roll_num]
+        angle_of_zero = NEEDLE_ANGLES_OF_ZERO[dial_num]
         num_from_angle = (10 * (angle - angle_of_zero / 360.0)) % 10
-        result[str(roll_num)] = num_from_angle
+        result[str(dial_num)] = num_from_angle
     if set(result.keys()) == {'1', '2', '3', '4'}:
-        result['value'] = determine_value_by_roll_positions(
+        result['value'] = determine_value_by_dial_positions(
             result['1'], result['2'], result['3'], result['4'])
     if DEBUG:
         print(result)
@@ -421,7 +421,7 @@ def get_meter_value(fn: str) -> Dict[str, float]:
     return result
 
 
-def determine_value_by_roll_positions(
+def determine_value_by_dial_positions(
         r1: float,
         r2: float,
         r3: float,
@@ -473,27 +473,27 @@ def get_mask_by_color(
     return cv2.inRange(hls_image, color_min, color_max)
 
 
-def find_rolls(img_hls: Image, fn: str) -> TemplateMatchResult:
-    template = get_rolls_template()
+def find_dials(img_hls: Image, fn: str) -> TemplateMatchResult:
+    template = get_dials_template()
     lightness = cv2.split(img_hls)[1]
     match_result = match_template(lightness, template)
 
-    if match_result.max_val < ROLLS_MATCH_THRESHOLD:
-        raise ValueError('Rolls not found from {} (match val = {})'.format(
+    if match_result.max_val < DIALS_MATCH_THRESHOLD:
+        raise ValueError('Dials not found from {} (match val = {})'.format(
             fn, match_result.max_val))
 
     return match_result
 
 
-_rolls_template = None
+_dials_template = None
 
 
-def get_rolls_template():
-    global _rolls_template
-    if _rolls_template is None:
-        _rolls_template = cv2.imread(ROLLS_FILE, cv2.IMREAD_GRAYSCALE)
-    assert _rolls_template.shape == (ROLLS_TEMPLATE_H, ROLLS_TEMPLATE_W)
-    return _rolls_template
+def get_dials_template():
+    global _dials_template
+    if _dials_template is None:
+        _dials_template = cv2.imread(DIALS_FILE, cv2.IMREAD_GRAYSCALE)
+    assert _dials_template.shape == (DIALS_TEMPLATE_H, DIALS_TEMPLATE_W)
+    return _dials_template
 
 
 def match_template(img: Image, template: Image) -> TemplateMatchResult:
