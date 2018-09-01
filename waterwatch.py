@@ -100,14 +100,13 @@ NEEDLE_COLOR_RANGE = HlsColor(9, 45, 35)
 NEEDLE_DIST_FROM_DIAL_CENTER = 4
 NEEDLE_MASK_THICKNESS = 8
 NEEDLE_ANGLES_OF_ZERO = {  # degrees
-    4: -8.0,
-    3: -8.0,
-    2: -8.0,
-    1: -8.0,
+    '0.0001': -8.0,
+    '0.0010': -8.0,
+    '0.0100': -8.0,
+    '0.1000': -8.0,
 }
 
-
-NEGATIVE_MOMENTUM_DIALS = {3}
+NEGATIVE_MOMENTUM_DIALS = {'0.0010'}
 
 
 class DialCenter(NamedTuple):
@@ -121,12 +120,12 @@ class DialData(NamedTuple):
     circle_mask: Image
 
 
-DIAL_CENTERS  = [
-    DialCenter(center=(37.3, 63.4), diameter=14),
-    DialCenter(center=(94.5, 86.3), diameter=15),
-    DialCenter(center=(135.5, 71.5), diameter=13),
-    DialCenter(center=(160.9, 36.5), diameter=13),
-]
+DIAL_CENTERS: Dict[str, DialCenter] = {
+    '0.0001': DialCenter(center=(37.3, 63.4), diameter=14),
+    '0.0010': DialCenter(center=(94.5, 86.3), diameter=15),
+    '0.0100': DialCenter(center=(135.5, 71.5), diameter=13),
+    '0.1000': DialCenter(center=(160.9, 36.5), diameter=13),
+}
 
 
 def main(argv=sys.argv):
@@ -145,19 +144,19 @@ def main(argv=sys.argv):
         print(': {}{}'.format(value_str, error_str))
 
 
-_dial_data: Optional[List[DialData]] = None
+_dial_data: Optional[Dict[str, DialData]] = None
 
 
-def get_dial_data() -> List[DialData]:
+def get_dial_data() -> Dict[str, DialData]:
     global _dial_data
     if _dial_data is None:
         _dial_data = _get_dial_data()
     return _dial_data
 
 
-def _get_dial_data() -> List[DialData]:
-    data_list = []
-    for dial_center in DIAL_CENTERS:
+def _get_dial_data() -> Dict[str, DialData]:
+    result = {}
+    for (name, dial_center) in DIAL_CENTERS.items():
         mask = numpy.zeros(
             shape=(DIALS_TEMPLATE_H, DIALS_TEMPLATE_W),
             dtype=numpy.uint8)
@@ -172,8 +171,8 @@ def _get_dial_data() -> List[DialData]:
         cv2.floodFill(mask, fill_mask, fill_point, 255)
         circle_mask = mask.copy()
         cv2.floodFill(mask, fill_mask, center, 255)
-        data_list.append(DialData(dial_center.center, mask, circle_mask))
-    return data_list
+        result[name] = DialData(dial_center.center, mask, circle_mask)
+    return result
 
 
 def convert_to_hls(image: Image, hue_shift=DEFAULT_HUE_SHIFT) -> Image:
@@ -323,10 +322,9 @@ def get_meter_value(fn: str) -> Dict[str, float]:
     if DEBUG:
         debug = convert_to_bgr(dials_hls)
 
-    result = {}
+    dial_positions: Dict[str, float] = {}
 
-    for (i, dial_data) in enumerate(get_dial_data()):
-        dial_num = 4 - i
+    for (dial_name, dial_data) in get_dial_data().items():
         dial_color = get_dial_color(dials_hls, dial_data)
 
         needle_mask_orig = get_mask_by_color(
@@ -362,7 +360,7 @@ def get_meter_value(fn: str) -> Dict[str, float]:
             momentum_x += (-1 if x < 0 else 1) * x**2
             momentum_y += (-1 if y < 0 else 1) * y**2
 
-        mom_sign = -1 if dial_num in NEGATIVE_MOMENTUM_DIALS else 1
+        mom_sign = -1 if dial_name in NEGATIVE_MOMENTUM_DIALS else 1
         momentum_vector = (mom_sign * momentum_x, mom_sign * momentum_y)
         momentum_angle = get_angle_by_vector(momentum_vector)
 
@@ -398,7 +396,7 @@ def get_meter_value(fn: str) -> Dict[str, float]:
                 debug, float_point_to_int(dial_data.center), 3, (0, 255, 0))
         if not angles:
             raise ValueError(
-                'Cannot determine angle for dial {}'.format(dial_num))
+                'Cannot determine angle for dial {}'.format(dial_name))
         min_angle = min(angles)
         angles_r = [
             a if abs(a - min_angle) < 0.75 else a - 1
@@ -409,24 +407,27 @@ def get_meter_value(fn: str) -> Dict[str, float]:
         else:
             center_angles = angles_r
         angle = sum(center_angles) / len(center_angles)
-        angle_of_zero = NEEDLE_ANGLES_OF_ZERO[dial_num]
-        num_from_angle = (10 * (angle - angle_of_zero / 360.0)) % 10
-        result[str(dial_num)] = num_from_angle
-    if set(result.keys()) == {'1', '2', '3', '4'}:
-        result['value'] = determine_value_by_dial_positions(
-            result['1'], result['2'], result['3'], result['4'])
+        fixed_angle = angle - (NEEDLE_ANGLES_OF_ZERO[dial_name] / 360.0)
+        dial_positions[dial_name] = (10.0 * fixed_angle) % 10.0
+
+    result = dial_positions.copy()
+
+    if set(dial_positions.keys()) == set(DIAL_CENTERS.keys()):
+        result['value'] = determine_value_by_dial_positions(dial_positions)
     if DEBUG:
         print(result)
         cv2.imshow('debug: ' + fn.rsplit('/', 1)[-1], scale_image(debug, 2))
     return result
 
 
-def determine_value_by_dial_positions(
-        r1: float,
-        r2: float,
-        r3: float,
-        r4: float,
-) -> float:
+def determine_value_by_dial_positions(dial_positions: Dict[str, float]) -> float:
+    assert len(dial_positions) == 4
+    r1: float
+    r2: float
+    r3: float
+    r4: float
+    (r4, r3, r2, r1) = [x for (_, x) in sorted(dial_positions.items())]
+
     d3 = (int(r3)
           + (1 if r3 % 1.0 > 0.5 and r4 <= 2 else 0)
           - (1 if r3 % 1.0 < 0.5 and r4 >= 8 else 0)) % 10
