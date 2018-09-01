@@ -430,6 +430,11 @@ def get_needle_points(dials_hls: Image, dial_data: DialData, debug: Image) -> Im
         needle_mask_de & dial_data.mask,
         cv2.RETR_EXTERNAL,
         cv2.CHAIN_APPROX_NONE)
+
+    if not contours:
+        raise ValueError(
+            "Cannot find needle contours in dial {}".format(dial_data.name))
+
     contour = sorted(contours, key=cv2.contourArea)[-1]
     if cv2.contourArea(contour) > 100:
         if DEBUG:
