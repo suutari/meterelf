@@ -1,0 +1,8 @@
+*~
+*.tmp
+*.old
+*.pyc
+__pycache__
+.git
+LICENSE
+README.rst
