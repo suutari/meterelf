@@ -121,6 +121,7 @@ class DialCenter(NamedTuple):
 
 
 class DialData(NamedTuple):
+    name: str
     center: FloatPoint
     mask: Image
     circle_mask: Image
@@ -186,7 +187,7 @@ def _get_dial_data() -> Dict[str, DialData]:
 
         # Fill also the center circle in the mask image
         cv2.floodFill(mask, fill_mask, center, 255)
-        result[name] = DialData(dial_center.center, mask, circle_mask)
+        result[name] = DialData(name, dial_center.center, mask, circle_mask)
 
         if 'masks' in DEBUG:
             cv2.imshow('mask of ' + name, mask)
@@ -340,37 +341,12 @@ def get_dial_color(dials_hls: Image, dial_data: DialData) -> HlsColor:
 def get_meter_value(fn: str) -> Dict[str, float]:
     dials_hls = get_dials_hls(fn)
 
-    if DEBUG:
-        debug = convert_to_bgr(dials_hls)
+    debug = convert_to_bgr(dials_hls) if DEBUG else dials_hls
 
     dial_positions: Dict[str, float] = {}
 
     for (dial_name, dial_data) in get_dial_data().items():
-        dial_color = get_dial_color(dials_hls, dial_data)
-
-        needle_mask_orig = get_mask_by_color(
-            dials_hls, dial_color, DIAL_COLOR_RANGE)
-        kernel = numpy.ones((3, 3), numpy.uint8)
-        needle_mask_dilated = cv2.dilate(needle_mask_orig, kernel)
-        needle_mask_de = cv2.erode(needle_mask_dilated, kernel)
-
-        (_bw, contours, _hier) = cv2.findContours(
-            needle_mask_de & dial_data.mask,
-            cv2.RETR_EXTERNAL,
-            cv2.CHAIN_APPROX_NONE)
-        contour = sorted(contours, key=cv2.contourArea)[-1]
-        if cv2.contourArea(contour) > 100:
-            if DEBUG:
-                cv2.drawContours(debug, [contour], -1, (255, 255, 0), -1)
-            needle_mask = needle_mask_de.copy()
-            needle_mask.fill(0)
-            cv2.drawContours(needle_mask, [contour], -1, 255, -1)
-        else:
-            needle_mask = needle_mask_de
-
-        center = dial_data.center
-
-        needle_points = cv2.findNonZero(needle_mask & dial_data.mask)
+        (needle_points, needle_mask) = get_needle_points(dials_hls, dial_data, debug)
         if needle_points is None:
             continue
 
@@ -439,6 +415,35 @@ def get_meter_value(fn: str) -> Dict[str, float]:
         print(result)
         cv2.imshow('debug: ' + fn.rsplit('/', 1)[-1], scale_image(debug, 2))
     return result
+
+
+def get_needle_points(dials_hls: Image, dial_data: DialData, debug: Image) -> Image:
+    dial_color = get_dial_color(dials_hls, dial_data)
+
+    needle_mask_orig = get_mask_by_color(
+        dials_hls, dial_color, DIAL_COLOR_RANGE)
+    kernel = numpy.ones((3, 3), numpy.uint8)
+    needle_mask_dilated = cv2.dilate(needle_mask_orig, kernel)
+    needle_mask_de = cv2.erode(needle_mask_dilated, kernel)
+
+    (_bw, contours, _hier) = cv2.findContours(
+        needle_mask_de & dial_data.mask,
+        cv2.RETR_EXTERNAL,
+        cv2.CHAIN_APPROX_NONE)
+    contour = sorted(contours, key=cv2.contourArea)[-1]
+    if cv2.contourArea(contour) > 100:
+        if DEBUG:
+            cv2.drawContours(debug, [contour], -1, (255, 255, 0), -1)
+        needle_mask = needle_mask_de.copy()
+        needle_mask.fill(0)
+        cv2.drawContours(needle_mask, [contour], -1, 255, -1)
+    else:
+        needle_mask = needle_mask_de
+
+    center = dial_data.center
+
+    needle_points = cv2.findNonZero(needle_mask & dial_data.mask)
+    return (needle_points, needle_mask)
 
 
 def determine_value_by_dial_positions(dial_positions: Dict[str, float]) -> float:
