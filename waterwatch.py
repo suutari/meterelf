@@ -6,7 +6,9 @@ import math
 import os
 import random
 import sys
-from typing import Dict, Iterable, List, NamedTuple, Optional, Tuple
+from typing import (
+    Dict, Iterable, Iterator, List, NamedTuple, Optional, Sequence, Tuple,
+    Union)
 
 import cv2
 import numpy
@@ -184,14 +186,26 @@ def convert_to_bgr(hls_image: Image, hue_shift=DEFAULT_HUE_SHIFT) -> Image:
     return cv2.cvtColor(shifted_hls_image, cv2.COLOR_HLS2BGR_FULL)
 
 
-def find_roll_centers(n: int = 255) -> List[RollCenter]:
-    avg_meter = get_average_meter_image(n)
+def find_roll_centers(
+        files: Union[int, Iterable[str]] = 255,
+) -> List[RollCenter]:
+    avg_meter = get_average_meter_image(get_files(files))
+    return find_roll_centers_from_image(avg_meter)
+
+
+def find_roll_centers_from_image(avg_meter: Image) -> List[RollCenter]:
     avg_meter_hls = convert_to_hls(avg_meter)
 
     match_result = find_rolls(avg_meter_hls, '<average_image>')
     rolls_hls = crop_rect(avg_meter_hls, match_result.rect)
 
     needles_mask = get_needles_mask_by_color(rolls_hls)
+    if DEBUG:
+        debug_img = convert_to_bgr(rolls_hls)
+        color_mask = cv2.merge((needles_mask, needles_mask, needles_mask * 0))
+        debug_img = cv2.addWeighted(debug_img, 1 ,color_mask, 0.50, 0)
+        cv2.imshow('debug', debug_img)
+        cv2.waitKey(0)
     (_bw, contours, _hier) = cv2.findContours(
         needles_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
     roll_centers = []
@@ -203,6 +217,12 @@ def find_roll_centers(n: int = 255) -> List[RollCenter]:
             raise ValueError('Needle center not circle enough')
         roll_centers.append(RollCenter(center, int(round(diameter))))
     return sorted(roll_centers, key=(lambda x: x.center[0]))
+
+
+def get_files(files: Union[int, Iterable[str]] = 255) -> Iterable[str]:
+    if isinstance(files, int):
+        return random.sample(get_image_filenames(), files)
+    return files
 
 
 def float_point_to_int(point: FloatPoint) -> Point:
@@ -224,15 +244,14 @@ def crop_rect(img: Image, rect: Rect) -> Image:
     return img[y0:y1, x0:x1]
 
 
-def get_average_meter_image(n: int = 255) -> Image:
-    norm_images = get_random_norm_images(n)
+def get_average_meter_image(files: Iterable[str]) -> Image:
+    norm_images = get_norm_images(files)
     norm_avg_img = calculate_average_of_norm_images(norm_images)
     return denormalize_image(norm_avg_img)
 
 
-def get_random_norm_images(n: int) -> List[Image]:
-    filenames = random.sample(get_image_filenames(), n)
-    return [normalize_image(get_meter_image_t(x)) for x in filenames]
+def get_norm_images(files: Iterable[str]) -> Iterator[Image]:
+    return (normalize_image(get_meter_image_t(x)) for x in files)
 
 
 def get_image_filenames() -> List[str]:
