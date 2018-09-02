@@ -1,4 +1,6 @@
 /requirements-local.*
 
+.mypy_cache
+
 *~
 *.pyc
