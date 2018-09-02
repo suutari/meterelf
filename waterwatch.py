@@ -291,7 +291,13 @@ def get_norm_images(files: Iterable[str]) -> Iterator[Image]:
 
 
 def get_image_filenames() -> List[str]:
-    return glob.glob(IMAGE_GLOB)
+    return [
+        path for path in glob.glob(IMAGE_GLOB)
+        if all(bad_filename not in path for bad_filename in [
+                '20180814021309-01-e01.jpg',
+                '20180814021310-00-e02.jpg',
+        ])
+    ]
 
 
 def get_meter_image_t(fn: str) -> Image:
