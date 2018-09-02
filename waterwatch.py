@@ -40,7 +40,7 @@ class HlsColor(numpy.ndarray):
         assert 0 <= lightness < 256
         assert 0 <= saturation < 256
         buf = numpy.array([hue, lightness, saturation], dtype=numpy.uint8)
-        instance =  super().__new__(  # type: ignore
+        instance = super().__new__(  # type: ignore
             cls, 3, dtype=numpy.uint8, buffer=buf)
         return instance  # type: ignore
 
@@ -237,7 +237,7 @@ def find_dial_centers_from_image(avg_meter: Image) -> List[DialCenter]:
     if DEBUG:
         debug_img = convert_to_bgr(dials_hls)
         color_mask = cv2.merge((needles_mask, needles_mask, needles_mask * 0))
-        debug_img = cv2.addWeighted(debug_img, 1 ,color_mask, 0.50, 0)
+        debug_img = cv2.addWeighted(debug_img, 1, color_mask, 0.50, 0)
         cv2.imshow('debug', debug_img)
         cv2.waitKey(0)
     (_bw, contours, _hier) = cv2.findContours(
@@ -372,7 +372,8 @@ def get_meter_value(fn: str) -> Dict[str, float]:
     dial_positions: Dict[str, float] = {}
 
     for (dial_name, dial_data) in get_dial_data().items():
-        (needle_points, needle_mask) = get_needle_points(dials_hls, dial_data, debug)
+        (needle_points, needle_mask) = get_needle_points(
+            dials_hls, dial_data, debug)
 
         momentum_x = 0.0
         momentum_y = 0.0
@@ -484,7 +485,9 @@ def find_non_zero(image: Image) -> List[PointAsArray]:
     return [x[0] for x in find_result]
 
 
-def determine_value_by_dial_positions(dial_positions: Dict[str, float]) -> float:
+def determine_value_by_dial_positions(
+        dial_positions: Dict[str, float],
+) -> float:
     assert len(dial_positions) == 4
     r1: float
     r2: float
