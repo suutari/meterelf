@@ -90,7 +90,7 @@ class TemplateMatchResult(NamedTuple):
 
 DATA_DIR = os.path.abspath(os.path.dirname(__file__))
 
-IMAGE_GLOB = '/home/tuomas/water-meter/2018*.jpg'
+IMAGE_GLOB = os.path.join(DATA_DIR, 'sample-files', '*.jpg')
 
 METER_RECT = Rect(top_left=(50, 160), bottom_right=(300, 410))
 METER_COORDS = METER_RECT.top_left + METER_RECT.bottom_right
