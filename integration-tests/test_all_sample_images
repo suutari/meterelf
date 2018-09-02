@@ -2,10 +2,10 @@
 set -e
 
 mydir=$(cd $(dirname "$0") && pwd)
-base=$mydir/test_all_sample_files
+base=$mydir/test_all_sample_images
 
 cd "$mydir/.."
-files=$(ls -1 sample-files/*.jpg | sort)
+files=$(ls -1 sample-images/*.jpg | sort)
 
 echo "Testing with $(echo "$files" | wc -l) files"
 

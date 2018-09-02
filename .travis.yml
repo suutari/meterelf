@@ -5,4 +5,4 @@ services: docker
 before_install: docker build -t waterwatch .
 
 script:
-  - docker run -it waterwatch /code/integration-tests/test_all_sample_files
+  - docker run -it waterwatch /code/integration-tests/test_all_sample_images
