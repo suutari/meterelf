@@ -1,5 +1,6 @@
 /requirements-local.*
 
+.tox
 .mypy_cache
 
 *.egg-info
