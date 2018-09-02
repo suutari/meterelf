@@ -17,6 +17,7 @@ import numpy
 
 Image = numpy.ndarray
 Point = Tuple[int, int]
+PointAsArray = numpy.ndarray
 FloatPoint = Tuple[float, float]
 
 DEBUG = {
@@ -34,39 +35,44 @@ class HlsColor(numpy.ndarray):
             hue: int = 0,
             lightness: int = 0,
             saturation: int = 0,
-    ) -> None:
+    ) -> 'HlsColor':
         assert 0 <= hue < 256
         assert 0 <= lightness < 256
         assert 0 <= saturation < 256
-        return super().__new__(cls, 3, dtype=numpy.uint8, buffer=numpy.array(
-            [hue, lightness, saturation], dtype=numpy.uint8))
+        buf = numpy.array([hue, lightness, saturation], dtype=numpy.uint8)
+        instance =  super().__new__(  # type: ignore
+            cls, 3, dtype=numpy.uint8, buffer=buf)
+        return instance  # type: ignore
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return '{name}({hue}, {lightness}, {saturation})'.format(
             name=type(self).__name__,
             hue=self.hue, lightness=self.lightness, saturation=self.saturation)
 
     @property
     def hue(self) -> int:
-        return self[0]
+        return int(self[0])
 
     @property
     def lightness(self) -> int:
-        return self[1]
+        return int(self[1])
 
     @property
     def saturation(self) -> int:
-        return self[2]
+        return int(self[2])
 
-    def get_range(self, color_range):
+    def get_range(
+            self,
+            color_range: 'HlsColor',
+    ) -> Tuple['HlsColor', 'HlsColor']:
         min_color = HlsColor(
-            max(int(self.hue) - int(color_range.hue), 0),
-            max(int(self.lightness) - int(color_range.lightness), 0),
-            max(int(self.saturation) - int(color_range.saturation), 0))
+            max(self.hue - color_range.hue, 0),
+            max(self.lightness - color_range.lightness, 0),
+            max(self.saturation - color_range.saturation, 0))
         max_color = HlsColor(
-            min(int(self.hue) + int(color_range.hue), 255),
-            min(int(self.lightness) + int(color_range.lightness), 255),
-            min(int(self.saturation) + int(color_range.saturation), 255))
+            min(self.hue + color_range.hue, 255),
+            min(self.lightness + color_range.lightness, 255),
+            min(self.saturation + color_range.saturation, 255))
         return (min_color, max_color)
 
 
@@ -135,19 +141,20 @@ DIAL_CENTERS: Dict[str, DialCenter] = {
 }
 
 
-def main(argv=sys.argv):
+def main(argv: Sequence[str] = sys.argv) -> None:
     filenames = argv[1:]
     for filename in filenames:
         print(filename, end='')
+        meter_values: Optional[Dict[str, float]] = None
+        error: Optional[Exception] = None
         try:
-            result = get_meter_value(filename)
-        except Exception as error:
-            result = {'error': error}
+            meter_values = get_meter_value(filename)
+        except Exception as e:
+            error = e
             if DEBUG:
                 raise
 
-        value = result.get('value')
-        error = result.get('error')
+        value = (meter_values or {}).get('value')
         value_str = '{:06.2f}'.format(value) if value else 'UNKNOWN'
         error_str = ' {}'.format(error) if error else ''
         print(': {}{}'.format(value_str, error_str))
@@ -197,12 +204,18 @@ def _get_dial_data() -> Dict[str, DialData]:
     return result
 
 
-def convert_to_hls(image: Image, hue_shift=DEFAULT_HUE_SHIFT) -> Image:
+def convert_to_hls(
+        image: Image,
+        hue_shift: int = DEFAULT_HUE_SHIFT,
+) -> Image:
     unshifted_hls_image = cv2.cvtColor(image, cv2.COLOR_BGR2HLS_FULL)
-    return unshifted_hls_image + HlsColor(hue_shift, 0, 0)
+    return unshifted_hls_image + HlsColor(hue_shift, 0, 0)  # type: ignore
 
 
-def convert_to_bgr(hls_image: Image, hue_shift=DEFAULT_HUE_SHIFT) -> Image:
+def convert_to_bgr(
+        hls_image: Image,
+        hue_shift: int = DEFAULT_HUE_SHIFT,
+) -> Image:
     shifted_hls_image = hls_image - HlsColor(hue_shift, 0, 0)
     return cv2.cvtColor(shifted_hls_image, cv2.COLOR_HLS2BGR_FULL)
 
@@ -247,22 +260,24 @@ def get_files(files: Union[int, Iterable[str]] = 255) -> Iterable[str]:
 
 
 def float_point_to_int(point: FloatPoint) -> Point:
-    return tuple(int(round(i)) for i in point)
+    return (int(round(point[0])), int(round(point[1])))
 
 
 def get_meter_image(filename: str) -> Image:
     img = cv2.imread(filename)
+    if img is None:
+        raise Exception("Unable to read image file: {}".format(filename))
     return crop_meter(img)
 
 
 def crop_meter(img: Image) -> Image:
     (x0, y0, x1, y1) = METER_COORDS
-    return img[y0:y1, x0:x1]
+    return img[y0:y1, x0:x1]  # type: ignore
 
 
 def crop_rect(img: Image, rect: Rect) -> Image:
     (x0, y0, x1, y1) = rect.top_left + rect.bottom_right
-    return img[y0:y1, x0:x1]
+    return img[y0:y1, x0:x1]  # type: ignore
 
 
 def get_average_meter_image(files: Iterable[str]) -> Image:
@@ -284,7 +299,10 @@ def get_meter_image_t(fn: str) -> Image:
     meter_hls = convert_to_hls(meter_img)
     dials = find_dials(meter_hls, fn)
     tl = dials.rect.top_left
-    m = numpy.float32([[1, 0, 30 - tl[0]], [0, 1, 116 - tl[1]]])
+    m = numpy.array([
+        [1, 0, 30 - tl[0]],
+        [0, 1, 116 - tl[1]]
+    ], dtype=numpy.float32)
     (h, w) = meter_img.shape[0:2]
     return cv2.warpAffine(meter_img, m, (w, h))
 
@@ -297,11 +315,11 @@ def scale_image(img: Image, scale: int) -> Image:
 
 
 def normalize_image(img: Image) -> Image:
-    return img.astype(numpy.dtype('float64')) / 255.0
+    return img.astype(numpy.dtype('float64')) / 255.0  # type: ignore
 
 
 def denormalize_image(img: Image) -> Image:
-    return ((img * 255.0) + 0.5).astype(numpy.dtype('uint8'))
+    return ((img * 255.0) + 0.5).astype(numpy.dtype('uint8'))  # type: ignore
 
 
 def calculate_average_of_norm_images(images: Iterable[Image]) -> Image:
@@ -335,7 +353,9 @@ def get_dial_color(dials_hls: Image, dial_data: DialData) -> HlsColor:
     (c_x, c_y) = dial_data.center
     (x, y) = (int(c_x), int(c_y))
     dial_core = crop_rect(dials_hls, Rect((x - 2, y - 2), (x + 3, y + 3)))
-    return HlsColor(*(int(round(x)) for x in cv2.mean(dial_core)[0:3]))
+    mean_color = cv2.mean(dial_core)
+    (h, l, s) = mean_color[0:3]  # type: ignore
+    return HlsColor(int(round(h)), int(round(l)), int(round(s)))
 
 
 def get_meter_value(fn: str) -> Dict[str, float]:
@@ -347,13 +367,11 @@ def get_meter_value(fn: str) -> Dict[str, float]:
 
     for (dial_name, dial_data) in get_dial_data().items():
         (needle_points, needle_mask) = get_needle_points(dials_hls, dial_data, debug)
-        if needle_points is None:
-            continue
 
         momentum_x = 0.0
         momentum_y = 0.0
         for needle_point in needle_points:
-            (x, y) = needle_point[0] - dial_data.center
+            (x, y) = needle_point - dial_data.center
             momentum_x += (-1 if x < 0 else 1) * x**2
             momentum_y += (-1 if y < 0 else 1) * y**2
 
@@ -363,30 +381,30 @@ def get_meter_value(fn: str) -> Dict[str, float]:
 
         if DEBUG:
             mom_scale = math.sqrt(momentum_x ** 2 + momentum_y ** 2)
+            center = dial_data.center
             mom_x = center[0] + 24 * mom_sign * momentum_x / mom_scale
             mom_y = center[1] + 24 * mom_sign * momentum_y / mom_scale
             cv2.circle(
                 debug, float_point_to_int((mom_x, mom_y)), 4, (0, 0, 255))
 
-        outer_points = cv2.findNonZero(needle_mask & dial_data.circle_mask)
-        if outer_points is None:
-            continue
+        outer_points = find_non_zero(needle_mask & dial_data.circle_mask)
 
         angles = []
         for outer_point in outer_points:
-            (x, y) = outer_point[0] - dial_data.center
+            (x, y) = outer_point - dial_data.center
             if DEBUG:
-                cv2.circle(debug, tuple(outer_point[0]), 0, (0, 128, 128))
+                point = (outer_point[0][0], outer_point[0][1])
+                cv2.circle(debug, point, 0, (0, 128, 128))
             angle = get_angle_by_vector((x, y))
-            if angle is not None:
+            if angle is not None and momentum_angle is not None:
                 angle_dist_from_mom = min(
                     abs(angle - momentum_angle),
                     abs(abs(angle - momentum_angle) - 1))
                 if angle_dist_from_mom < 0.15:
                     angles.append(angle)
                     if DEBUG:
-                        cv2.circle(
-                            debug, tuple(outer_point[0]), 0, (0, 255, 255))
+                        coords = (outer_point[0], outer_point[1])
+                        cv2.circle(debug, coords, 0, (0, 255, 255))
 
         if DEBUG:
             cv2.circle(
@@ -417,7 +435,11 @@ def get_meter_value(fn: str) -> Dict[str, float]:
     return result
 
 
-def get_needle_points(dials_hls: Image, dial_data: DialData, debug: Image) -> Image:
+def get_needle_points(
+        dials_hls: Image,
+        dial_data: DialData,
+        debug: Image,
+) -> Tuple[List[PointAsArray], Image]:
     dial_color = get_dial_color(dials_hls, dial_data)
 
     needle_mask_orig = get_mask_by_color(
@@ -445,10 +467,15 @@ def get_needle_points(dials_hls: Image, dial_data: DialData, debug: Image) -> Im
     else:
         needle_mask = needle_mask_de
 
-    center = dial_data.center
-
-    needle_points = cv2.findNonZero(needle_mask & dial_data.mask)
+    needle_points = find_non_zero(needle_mask & dial_data.mask)
     return (needle_points, needle_mask)
+
+
+def find_non_zero(image: Image) -> List[PointAsArray]:
+    find_result = cv2.findNonZero(image)
+    if find_result is None:
+        return []
+    return [x[0] for x in find_result]
 
 
 def determine_value_by_dial_positions(dial_positions: Dict[str, float]) -> float:
@@ -517,13 +544,15 @@ def find_dials(img_hls: Image, fn: str) -> TemplateMatchResult:
     return match_result
 
 
-_dials_template = None
+_dials_template: Optional[Image] = None
 
 
-def get_dials_template():
+def get_dials_template() -> Image:
     global _dials_template
     if _dials_template is None:
         _dials_template = cv2.imread(DIALS_FILE, cv2.IMREAD_GRAYSCALE)
+        if _dials_template is None:
+            raise IOError("Cannot read dials template: {}".format(DIALS_FILE))
     assert _dials_template.shape == (DIALS_TEMPLATE_H, DIALS_TEMPLATE_W)
     return _dials_template
 
