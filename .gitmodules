@@ -1,0 +1,3 @@
+[submodule "numpy-stubs"]
+	path = numpy-stubs
+	url = https://github.com/numpy/numpy-stubs.git
