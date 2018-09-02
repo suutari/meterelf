@@ -14,7 +14,7 @@ outdir=$(mktemp -d -t waterwatch_test.XXXXXX)
 # Don't stop on errors
 set +e
 
-./waterwatch.py $files >"$outdir/stdout" 2>"$outdir/stderr"
+python -m waterwatch $files >"$outdir/stdout" 2>"$outdir/stderr"
 exit_code=$?
 
 diff -u "$base.expected_stdout" "$outdir/stdout"

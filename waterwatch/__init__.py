@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-
 import functools
 import glob
 import math
@@ -88,7 +86,7 @@ class TemplateMatchResult(NamedTuple):
     max_val: float
 
 
-DATA_DIR = os.path.abspath(os.path.dirname(__file__))
+DATA_DIR = os.path.abspath(os.path.dirname(os.path.dirname(__file__)))
 
 IMAGE_GLOB = os.path.join(DATA_DIR, 'sample-images', '*.jpg')
 
@@ -573,7 +571,3 @@ def match_template(img: Image, template: Image) -> TemplateMatchResult:
     top_left = max_loc
     bottom_right = (top_left[0] + w, top_left[1] + h)
     return TemplateMatchResult(Rect(top_left, bottom_right), max_val)
-
-
-if __name__ == '__main__':
-    main()
