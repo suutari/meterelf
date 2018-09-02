@@ -2,5 +2,7 @@
 
 .mypy_cache
 
+*.egg-info
+
 *~
 *.pyc
