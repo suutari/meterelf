@@ -1,7 +1,10 @@
 /requirements-local.*
 
-.tox
+.cache
+.coverage
 .mypy_cache
+.pytest_cache
+.tox
 
 *.egg-info
 
