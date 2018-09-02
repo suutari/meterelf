@@ -1,8 +1,17 @@
 branches: {only: [master, test]}
 
-services: docker
+sudo: false
+language: python
+cache: pip
 
-before_install: docker build -t waterwatch .
+matrix:
+  include:
+    - {python: "3.6", env: TOXENV=style}
+    - {python: "3.6", env: TOXENV=packaging}
+    - {python: "3.6", env: TOXENV=typing}
+    - python: "3.6"
+    - python: "3.7-dev"
 
-script:
-  - docker run -it waterwatch /code/integration-tests/test_all_sample_images
+install: pip install tox-travis codecov
+script: tox
+after_success: codecov -e TRAVIS_PYTHON_VERSION
