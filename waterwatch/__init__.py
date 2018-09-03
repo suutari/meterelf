@@ -11,6 +11,11 @@ import cv2
 import numpy
 
 from ._colors import BGR_BLACK, BGR_MAGENTA, HlsColor
+from ._params import (
+    DIAL_CENTERS, DIAL_COLOR_RANGE, DIALS_FILE, DIALS_MATCH_THRESHOLD,
+    DIALS_TEMPLATE_SIZE, IMAGE_GLOB, METER_RECT, NEEDLE_ANGLES_OF_ZERO,
+    NEEDLE_CIRCLE_MASK_THICKNESS, NEEDLE_COLOR, NEEDLE_COLOR_RANGE,
+    NEEDLE_DIST_FROM_DIAL_CENTER, NEGATIVE_MOMENTUM_DIALS)
 from ._types import (
     DialCenter, DialData, FloatPoint, Image, Point, PointAsArray, Rect,
     TemplateMatchResult)
@@ -24,66 +29,8 @@ if 'all' in DEBUG:
     DEBUG = {'masks'}
 
 
-# Types
-
-class Rect(NamedTuple):
-    top_left: Point
-    bottom_right: Point
-
-
-class TemplateMatchResult(NamedTuple):
-    rect: Rect
-    max_val: float
-
-
-DATA_DIR = os.path.abspath(os.path.dirname(os.path.dirname(__file__)))
-
-IMAGE_GLOB = os.path.join(DATA_DIR, 'sample-images', '*.jpg')
-
-METER_RECT = Rect(top_left=(50, 160), bottom_right=(300, 410))
-
-DIALS_FILE = os.path.join(DATA_DIR, 'dials_gray.png')
-DIALS_MATCH_THRESHOLD = 20000000
-DIALS_TEMPLATE_W = 188
-DIALS_TEMPLATE_H = 119
-
 #: Shift hue values by this amount when converting images to HLS
 DEFAULT_HUE_SHIFT = 128
-
-#: Color of the dial needles
-#:
-#: Note: The hue values in these colors are shifted by DEFAULT_HUE_SHIFT
-DIAL_COLOR_RANGE = {
-    '0.0001': HlsColor(10, 35, 65),
-    '0.001': HlsColor(15, 60, 80),
-    '0.01': HlsColor(10, 45, 50),
-    '0.1': HlsColor(15, 55, 60),
-}
-NEEDLE_COLOR = HlsColor(125, 80, 130)
-NEEDLE_COLOR_RANGE = HlsColor(9, 45, 35)
-NEEDLE_DIST_FROM_DIAL_CENTER = 4
-NEEDLE_CIRCLE_MASK_THICKNESS: Dict[str, int] = {
-    '0.0001': 10,
-    '0.001': 10,
-    '0.01': 6,
-    '0.1': 9,
-}
-NEEDLE_ANGLES_OF_ZERO = {  # degrees
-    '0.0001': -4.5,
-    '0.001': -4.5,
-    '0.01': -4.5,
-    '0.1': -4.5,
-}
-
-NEGATIVE_MOMENTUM_DIALS = {'0.001'}
-
-
-DIAL_CENTERS: Dict[str, DialCenter] = {
-    '0.0001': DialCenter(center=(37.3, 63.4), diameter=16),
-    '0.001': DialCenter(center=(94.0, 86.0), diameter=15),
-    '0.01': DialCenter(center=(135.0, 71.9), diameter=11),
-    '0.1': DialCenter(center=(160.9, 36.5), diameter=12),
-}
 
 
 def main(argv: Sequence[str] = sys.argv) -> None:
@@ -123,7 +70,7 @@ def _get_dial_data() -> Dict[str, DialData]:
     result = {}
     for (name, dial_center) in DIAL_CENTERS.items():
         mask = numpy.zeros(
-            shape=(DIALS_TEMPLATE_H, DIALS_TEMPLATE_W),
+            shape=DIALS_TEMPLATE_SIZE,
             dtype=numpy.uint8)
         dial_radius = int(round(dial_center.diameter/2.0))
         center = float_point_to_int(dial_center.center)
@@ -519,7 +466,7 @@ def get_dials_template() -> Image:
         _dials_template = cv2.imread(DIALS_FILE, cv2.IMREAD_GRAYSCALE)
         if _dials_template is None:
             raise IOError("Cannot read dials template: {}".format(DIALS_FILE))
-    assert _dials_template.shape == (DIALS_TEMPLATE_H, DIALS_TEMPLATE_W)
+    assert _dials_template.shape == DIALS_TEMPLATE_SIZE
     return _dials_template
 
 
