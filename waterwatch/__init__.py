@@ -175,7 +175,7 @@ DIAL_CENTERS: Dict[str, DialCenter] = {
 def main(argv: Sequence[str] = sys.argv) -> None:
     filenames = argv[1:]
     for filename in filenames:
-        print(filename, end='')
+        print(filename, end='')  # noqa
         meter_values: Optional[Dict[str, float]] = None
         error: Optional[Exception] = None
         try:
@@ -183,7 +183,7 @@ def main(argv: Sequence[str] = sys.argv) -> None:
         except Exception as e:
             error = e
             if DEBUG:
-                print(e)
+                print(e)  # noqa
                 raise
 
         value = (meter_values or {}).get('value')
@@ -192,7 +192,7 @@ def main(argv: Sequence[str] = sys.argv) -> None:
         output = ': {}{}'.format(value_str, error_str)
         if DEBUG:
             output += ' {!r}'.format(meter_values)
-        print(output)
+        print(output)  # noqa
 
 
 _dial_data: Optional[Dict[str, DialData]] = None
