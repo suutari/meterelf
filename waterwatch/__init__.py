@@ -183,7 +183,7 @@ def main(argv: Sequence[str] = sys.argv) -> None:
         except Exception as e:
             error = e
             if DEBUG:
-                print(e)  # noqa
+                print(': {}'.format(e))  # noqa
                 raise
 
         value = (meter_values or {}).get('value')
