@@ -74,3 +74,28 @@ def cwd_as(directory):
         yield
     finally:
         os.chdir(old_dir)
+
+
+def test_find_dial_centers():
+    files = waterwatch.get_image_filenames()
+    result = waterwatch.find_dial_centers(files)
+    assert len(result) == 4
+    sorted_result = sorted(result, key=(lambda x: x.center[0]))
+
+    for (center_data, expected) in zip(result, EXPECTED_CENTER_DATA):
+        (expected_x, expected_y, expected_d) = expected
+        coords = center_data.center
+        diameter = center_data.diameter
+        assert diameter == expected_d
+        assert abs(coords[0] - expected_x) < 0.05
+        assert abs(coords[1] - expected_y) < 0.05
+
+    assert result == sorted_result
+
+
+EXPECTED_CENTER_DATA = [
+    (37.4, 63.5, 14),
+    (94.5, 86.3, 15),
+    (135.6, 71.5, 13),
+    (161.0, 36.5, 13),
+]
