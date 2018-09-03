@@ -5,20 +5,15 @@ import os
 import random
 import sys
 from typing import (
-    Dict, Iterable, Iterator, List, NamedTuple, Optional, Sequence, Tuple,
-    Union)
+    Dict, Iterable, Iterator, List, Optional, Sequence, Tuple, Union)
 
 import cv2
 import numpy
 
 from ._colors import BGR_BLACK, BGR_MAGENTA, HlsColor
-
-# Type aliases
-
-Image = numpy.ndarray
-Point = Tuple[int, int]
-PointAsArray = numpy.ndarray
-FloatPoint = Tuple[float, float]
+from ._types import (
+    DialCenter, DialData, FloatPoint, Image, Point, PointAsArray, Rect,
+    TemplateMatchResult)
 
 DEBUG = {
     x for x in os.getenv('DEBUG', '').replace(',', ' ').split()
@@ -81,18 +76,6 @@ NEEDLE_ANGLES_OF_ZERO = {  # degrees
 }
 
 NEGATIVE_MOMENTUM_DIALS = {'0.001'}
-
-
-class DialCenter(NamedTuple):
-    center: FloatPoint
-    diameter: int
-
-
-class DialData(NamedTuple):
-    name: str
-    center: FloatPoint
-    mask: Image
-    circle_mask: Image
 
 
 DIAL_CENTERS: Dict[str, DialCenter] = {
