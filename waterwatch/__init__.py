@@ -129,27 +129,27 @@ DEFAULT_HUE_SHIFT = 128
 #: Note: The hue values in these colors are shifted by DEFAULT_HUE_SHIFT
 DIAL_COLOR_RANGE = {
     '0.0001': HlsColor(10, 35, 65),
-    '0.0010': HlsColor(15, 60, 80),
-    '0.0100': HlsColor(10, 45, 50),
-    '0.1000': HlsColor(15, 55, 60),
+    '0.001': HlsColor(15, 60, 80),
+    '0.01': HlsColor(10, 45, 50),
+    '0.1': HlsColor(15, 55, 60),
 }
 NEEDLE_COLOR = HlsColor(125, 80, 130)
 NEEDLE_COLOR_RANGE = HlsColor(9, 45, 35)
 NEEDLE_DIST_FROM_DIAL_CENTER = 4
 NEEDLE_CIRCLE_MASK_THICKNESS: Dict[str, int] = {
-    '0.0001': 8,
-    '0.0010': 10,
-    '0.0100': 4,
-    '0.1000': 8,
+    '0.0001': 10,
+    '0.001': 10,
+    '0.01': 6,
+    '0.1': 9,
 }
 NEEDLE_ANGLES_OF_ZERO = {  # degrees
     '0.0001': -4.5,
-    '0.0010': -4.5,
-    '0.0100': -4.5,
-    '0.1000': -4.5,
+    '0.001': -4.5,
+    '0.01': -4.5,
+    '0.1': -4.5,
 }
 
-NEGATIVE_MOMENTUM_DIALS = {'0.0010'}
+NEGATIVE_MOMENTUM_DIALS = {'0.001'}
 
 
 class DialCenter(NamedTuple):
@@ -166,9 +166,9 @@ class DialData(NamedTuple):
 
 DIAL_CENTERS: Dict[str, DialCenter] = {
     '0.0001': DialCenter(center=(37.3, 63.4), diameter=16),
-    '0.0010': DialCenter(center=(94.0, 86.0), diameter=15),
-    '0.0100': DialCenter(center=(135.0, 71.9), diameter=13),
-    '0.1000': DialCenter(center=(160.9, 36.5), diameter=12),
+    '0.001': DialCenter(center=(94.0, 86.0), diameter=15),
+    '0.01': DialCenter(center=(135.0, 71.9), diameter=11),
+    '0.1': DialCenter(center=(160.9, 36.5), diameter=12),
 }
 
 
