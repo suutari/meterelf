@@ -74,6 +74,29 @@ class HlsColor(numpy.ndarray):
         return (min_color, max_color)
 
 
+class BgrColor(NamedTuple):
+    blue: int
+    green: int
+    red: int
+
+
+BGR_BLACK = BgrColor(0, 0, 0)
+BGR_WHITE = BgrColor(255, 255, 255)
+BGR_GRAY = BgrColor(128, 128, 128)
+BGR_BLUE = BgrColor(255, 0, 0)
+BGR_GREEN = BgrColor(0, 255, 0)
+BGR_RED = BgrColor(0, 0, 255)
+BGR_YELLOW = BgrColor(0, 255, 255)
+BGR_MAGENTA = BgrColor(255, 0, 255)
+BGR_CYAN = BgrColor(255, 255, 0)
+BGR_DARK_BLUE = BgrColor(128, 0, 0)
+BGR_DARK_GREEN = BgrColor(0, 128, 0)
+BGR_DARK_RED = BgrColor(0, 0, 128)
+BGR_DARK_YELLOW = BgrColor(0, 128, 128)
+BGR_DARK_MAGENTA = BgrColor(128, 0, 128)
+BGR_DARK_CYAN = BgrColor(128, 128, 0)
+
+
 # Types
 
 class Rect(NamedTuple):
@@ -104,16 +127,26 @@ DEFAULT_HUE_SHIFT = 128
 #: Color of the dial needles
 #:
 #: Note: The hue values in these colors are shifted by DEFAULT_HUE_SHIFT
-DIAL_COLOR_RANGE = HlsColor(12, 90, 70)
+DIAL_COLOR_RANGE = {
+    '0.0001': HlsColor(10, 35, 65),
+    '0.0010': HlsColor(15, 60, 80),
+    '0.0100': HlsColor(10, 45, 50),
+    '0.1000': HlsColor(15, 55, 60),
+}
 NEEDLE_COLOR = HlsColor(125, 80, 130)
 NEEDLE_COLOR_RANGE = HlsColor(9, 45, 35)
 NEEDLE_DIST_FROM_DIAL_CENTER = 4
-NEEDLE_MASK_THICKNESS = 8
+NEEDLE_CIRCLE_MASK_THICKNESS: Dict[str, int] = {
+    '0.0001': 8,
+    '0.0010': 10,
+    '0.0100': 4,
+    '0.1000': 8,
+}
 NEEDLE_ANGLES_OF_ZERO = {  # degrees
-    '0.0001': -8.0,
-    '0.0010': -8.0,
-    '0.0100': -8.0,
-    '0.1000': -8.0,
+    '0.0001': -4.5,
+    '0.0010': -4.5,
+    '0.0100': -4.5,
+    '0.1000': -4.5,
 }
 
 NEGATIVE_MOMENTUM_DIALS = {'0.0010'}
@@ -132,10 +165,10 @@ class DialData(NamedTuple):
 
 
 DIAL_CENTERS: Dict[str, DialCenter] = {
-    '0.0001': DialCenter(center=(37.3, 63.4), diameter=14),
-    '0.0010': DialCenter(center=(94.5, 86.3), diameter=15),
-    '0.0100': DialCenter(center=(135.5, 71.5), diameter=13),
-    '0.1000': DialCenter(center=(160.9, 36.5), diameter=13),
+    '0.0001': DialCenter(center=(37.3, 63.4), diameter=16),
+    '0.0010': DialCenter(center=(94.0, 86.0), diameter=15),
+    '0.0100': DialCenter(center=(135.0, 71.9), diameter=13),
+    '0.1000': DialCenter(center=(160.9, 36.5), diameter=12),
 }
 
 
@@ -179,7 +212,8 @@ def _get_dial_data() -> Dict[str, DialData]:
 
         # Draw two circles to the mask image
         start_radius = dial_radius + NEEDLE_DIST_FROM_DIAL_CENTER
-        for i in [0, NEEDLE_MASK_THICKNESS - 1]:
+        circle_thickness = NEEDLE_CIRCLE_MASK_THICKNESS[name]
+        for i in [0, circle_thickness - 1]:
             cv2.circle(mask, center, start_radius + i, 255)
 
         # Fill the area between the two circles and save result to
@@ -385,7 +419,7 @@ def get_meter_value(fn: str) -> Dict[str, float]:
         momentum_angle = get_angle_by_vector(momentum_vector)
 
         if DEBUG:
-            mom_scale = math.sqrt(momentum_x ** 2 + momentum_y ** 2)
+            mom_scale = math.sqrt(momentum_x**2 + momentum_y**2)
             center = dial_data.center
             mom_x = center[0] + 24 * mom_sign * momentum_x / mom_scale
             mom_y = center[1] + 24 * mom_sign * momentum_y / mom_scale
@@ -394,39 +428,48 @@ def get_meter_value(fn: str) -> Dict[str, float]:
 
         outer_points = find_non_zero(needle_mask & dial_data.circle_mask)
 
-        angles = []
+        angles_and_sqdists: List[Tuple[float, float]] = []
         for outer_point in outer_points:
             (x, y) = outer_point - dial_data.center
             if DEBUG:
-                point = (outer_point[0][0], outer_point[0][1])
+                point = (outer_point[0], outer_point[1])
                 cv2.circle(debug, point, 0, (0, 128, 128))
             angle = get_angle_by_vector((x, y))
+
             if angle is not None and momentum_angle is not None:
                 angle_dist_from_mom = min(
                     abs(angle - momentum_angle),
                     abs(abs(angle - momentum_angle) - 1))
-                if angle_dist_from_mom < 0.15:
-                    angles.append(angle)
+                if angle_dist_from_mom < 0.25:
+                    angles_and_sqdists.append((angle, (x**2 + y**2)))
                     if DEBUG:
                         coords = (outer_point[0], outer_point[1])
                         cv2.circle(debug, coords, 0, (0, 255, 255))
 
         if DEBUG:
-            cv2.circle(
-                debug, float_point_to_int(dial_data.center), 3, (0, 255, 0))
-        if not angles:
+            debug4 = scale_image(debug, 4)
+            cent = dial_data.center
+            dial_center = float_point_to_int((cent[0] * 4, cent[1] * 4))
+            cv2.circle(debug4, dial_center, 0, BGR_BLACK)
+            cv2.circle(debug4, dial_center, 6, BGR_MAGENTA)
+            cv2.imshow('debug: ' + fn.rsplit('/', 1)[-1], debug4)
+            cv2.waitKey(0)
+        if not angles_and_sqdists:
             raise ValueError(
                 'Cannot determine angle for dial {}'.format(dial_name))
-        min_angle = min(angles)
-        angles_r = [
-            a if abs(a - min_angle) < 0.75 else a - 1
-            for a in angles]
-        if len(angles_r) >= 5:
-            cut_out = min(2, (len(angles_r) - 3) // 2)
-            center_angles = sorted(angles_r)[cut_out:-cut_out]
+        min_angle = min(a for (a, _d) in angles_and_sqdists)
+        angles_and_sqdists_r = [
+            ((a, d) if abs(a - min_angle) < 0.75 else (a - 1, d))
+            for (a, d) in angles_and_sqdists]
+        if len(angles_and_sqdists_r) >= 5:
+            cut_out = min(2, (len(angles_and_sqdists_r) - 3) // 2)
+            center_angles_and_sqdists = (
+                sorted(angles_and_sqdists_r)[cut_out:-cut_out])
         else:
-            center_angles = angles_r
-        angle = sum(center_angles) / len(center_angles)
+            center_angles_and_sqdists = angles_and_sqdists_r
+        angle = (
+            sum(a * d for (a, d) in center_angles_and_sqdists) /
+            sum(d for (_a, d) in center_angles_and_sqdists))
         fixed_angle = angle - (NEEDLE_ANGLES_OF_ZERO[dial_name] / 360.0)
         dial_positions[dial_name] = (10.0 * fixed_angle) % 10.0
 
@@ -448,7 +491,7 @@ def get_needle_points(
     dial_color = get_dial_color(dials_hls, dial_data)
 
     needle_mask_orig = get_mask_by_color(
-        dials_hls, dial_color, DIAL_COLOR_RANGE)
+        dials_hls, dial_color, DIAL_COLOR_RANGE[dial_data.name])
     kernel = numpy.ones((3, 3), numpy.uint8)
     needle_mask_dilated = cv2.dilate(needle_mask_orig, kernel)
     needle_mask_de = cv2.erode(needle_mask_dilated, kernel)
@@ -494,14 +537,14 @@ def determine_value_by_dial_positions(
     (r4, r3, r2, r1) = [x for (_, x) in sorted(dial_positions.items())]
 
     d3 = (int(r3)
-          + (1 if r3 % 1.0 > 0.5 and r4 <= 2 else 0)
-          - (1 if r3 % 1.0 < 0.5 and r4 >= 8 else 0)) % 10
+          + (1 if r3 % 1.0 > 0.55 and r4 <= 2 else 0)
+          - (1 if r3 % 1.0 < 0.45 and r4 >= 8 else 0)) % 10
     d2 = (int(r2)
-          + (1 if r2 % 1.0 > 0.5 and d3 <= 2 else 0)
-          - (1 if r2 % 1.0 < 0.5 and d3 >= 8 else 0)) % 10
+          + (1 if r2 % 1.0 > 0.55 and d3 <= 2 else 0)
+          - (1 if r2 % 1.0 < 0.45 and d3 >= 8 else 0)) % 10
     d1 = (int(r1)
-          + (1 if r1 % 1.0 > 0.5 and d2 <= 2 else 0)
-          - (1 if r1 % 1.0 < 0.5 and d2 >= 8 else 0)) % 10
+          + (1 if r1 % 1.0 > 0.55 and d2 <= 2 else 0)
+          - (1 if r1 % 1.0 < 0.45 and d2 >= 8 else 0)) % 10
     return (d1 * 100.0) + (d2 * 10.0) + (d3 * 1.0) + r4 / 10.0
 
 
