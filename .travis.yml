@@ -9,6 +9,7 @@ matrix:
     - python: "3.6"
     - python: "3.7-dev"
     - {python: "3.6", env: TOXENV=packaging}
+    - {python: "3.6", env: TOXENV=requirements}
     - {python: "3.6", env: TOXENV=style}
     - {python: "3.6", env: TOXENV=typing}
 
