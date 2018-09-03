@@ -188,7 +188,10 @@ def main(argv: Sequence[str] = sys.argv) -> None:
         value = (meter_values or {}).get('value')
         value_str = '{:06.2f}'.format(value) if value else 'UNKNOWN'
         error_str = ' {}'.format(error) if error else ''
-        print(': {}{}'.format(value_str, error_str))
+        output = ': {}{}'.format(value_str, error_str)
+        if DEBUG:
+            output += ' {!r}'.format(meter_values)
+        print(output)
 
 
 _dial_data: Optional[Dict[str, DialData]] = None
@@ -478,7 +481,6 @@ def get_meter_value(fn: str) -> Dict[str, float]:
     if set(dial_positions.keys()) == set(DIAL_CENTERS.keys()):
         result['value'] = determine_value_by_dial_positions(dial_positions)
     if DEBUG:
-        print(result)
         cv2.imshow('debug: ' + fn.rsplit('/', 1)[-1], scale_image(debug, 2))
     return result
 
