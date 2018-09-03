@@ -46,7 +46,6 @@ DATA_DIR = os.path.abspath(os.path.dirname(os.path.dirname(__file__)))
 IMAGE_GLOB = os.path.join(DATA_DIR, 'sample-images', '*.jpg')
 
 METER_RECT = Rect(top_left=(50, 160), bottom_right=(300, 410))
-METER_COORDS = METER_RECT.top_left + METER_RECT.bottom_right
 
 DIALS_FILE = os.path.join(DATA_DIR, 'dials_gray.png')
 DIALS_MATCH_THRESHOLD = 20000000
@@ -239,8 +238,7 @@ def get_meter_image(filename: str) -> Image:
 
 
 def crop_meter(img: Image) -> Image:
-    (x0, y0, x1, y1) = METER_COORDS
-    return img[y0:y1, x0:x1]  # type: ignore
+    return crop_rect(img, METER_RECT)
 
 
 def crop_rect(img: Image, rect: Rect) -> Image:
