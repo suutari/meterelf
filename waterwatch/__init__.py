@@ -210,6 +210,7 @@ def get_meter_value(fn: str) -> Dict[str, float]:
     debug = convert_to_bgr(dials_hls) if DEBUG else dials_hls
 
     dial_positions: Dict[str, float] = {}
+    unreadable_dials: List[str] = []
 
     for (dial_name, dial_data) in get_dial_data().items():
         (needle_points, needle_mask) = get_needle_points(
@@ -263,8 +264,8 @@ def get_meter_value(fn: str) -> Dict[str, float]:
             cv2.imshow('debug: ' + fn.rsplit('/', 1)[-1], debug4)
             cv2.waitKey(0)
         if not angles_and_sqdists:
-            raise ValueError(
-                'Cannot determine angle for dial {}'.format(dial_name))
+            unreadable_dials.append(dial_name)
+            continue
         min_angle = min(a for (a, _d) in angles_and_sqdists)
         angles_and_sqdists_r = [
             ((a, d) if abs(a - min_angle) < 0.75 else (a - 1, d))
@@ -280,6 +281,18 @@ def get_meter_value(fn: str) -> Dict[str, float]:
             sum(d for (_a, d) in center_angles_and_sqdists))
         fixed_angle = angle - (NEEDLE_ANGLES_OF_ZERO[dial_name] / 360.0)
         dial_positions[dial_name] = (10.0 * fixed_angle) % 10.0
+
+    if unreadable_dials:
+        if DEBUG:
+            extra_info = ' (' + ' | '.join(
+                '{}: {}'.format(
+                    k, '{:.2f}'.format(v) if v is not None else '-.--')
+                for (k, v) in sorted(dial_positions.items())) + ')'
+        else:
+            extra_info = ''
+        raise ValueError(
+            'Cannot determine angle for dial {}{}'.format(
+                unreadable_dials[0], extra_info))
 
     result = dial_positions.copy()
 
