@@ -25,7 +25,12 @@ DIAL_COLOR_RANGE = {
 }
 NEEDLE_COLOR = HlsColor(125, 80, 130)
 NEEDLE_COLOR_RANGE = HlsColor(9, 45, 35)
-NEEDLE_DIST_FROM_DIAL_CENTER = 4
+NEEDLE_DISTS_FROM_DIAL_CENTER: Dict[str, int] = {
+    '0.0001': 4,
+    '0.001': 4,
+    '0.01': 4,
+    '0.1': 4,
+}
 NEEDLE_CIRCLE_MASK_THICKNESS: Dict[str, int] = {
     '0.0001': 10,
     '0.001': 10,

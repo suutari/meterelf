@@ -14,7 +14,7 @@ from ._params import (
     DIAL_CENTERS, DIAL_COLOR_RANGE, DIALS_FILE, DIALS_MATCH_THRESHOLD,
     DIALS_TEMPLATE_SIZE, IMAGE_GLOB, METER_RECT, NEEDLE_ANGLES_OF_ZERO,
     NEEDLE_CIRCLE_MASK_THICKNESS, NEEDLE_COLOR, NEEDLE_COLOR_RANGE,
-    NEEDLE_DIST_FROM_DIAL_CENTER, NEGATIVE_MOMENTUM_DIALS)
+    NEEDLE_DISTS_FROM_DIAL_CENTER, NEGATIVE_MOMENTUM_DIALS)
 from ._types import (
     DialCenter, DialData, FloatPoint, Image, Point, PointAsArray, Rect,
     TemplateMatchResult)
@@ -75,7 +75,8 @@ def _get_dial_data() -> Dict[str, DialData]:
         center = float_point_to_int(dial_center.center)
 
         # Draw two circles to the mask image
-        start_radius = dial_radius + NEEDLE_DIST_FROM_DIAL_CENTER
+        dist_from_center = NEEDLE_DISTS_FROM_DIAL_CENTER[name]
+        start_radius = dial_radius + dist_from_center
         circle_thickness = NEEDLE_CIRCLE_MASK_THICKNESS[name]
         for i in [0, circle_thickness - 1]:
             cv2.circle(mask, center, start_radius + i, 255)
