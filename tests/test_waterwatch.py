@@ -27,6 +27,9 @@ def teardown_module():
         mock_func.stop()
 
 
+ALLOWED_INACCURACY = 0.00
+
+
 def test_main_with_all_sample_images(capsys):
     with open(expected_all_output_file, 'rt') as fp:
         expected_output = fp.read()
@@ -48,36 +51,41 @@ def test_main_with_all_sample_images(capsys):
     ]
     (filenames, values) = zip(*result)
     (expected_filenames, expected_values) = zip(*expected)
-    assert filenames == expected_filenames
     value_map = dict(result)
+    failed_files = set()
 
     diffs = []
-    for precision in [1000, 0.5, 0.1, 0.05, 0.01, 0.005]:
+    for precision in [1000, 0.5, 0.1, 0.05, 0.04, 0.03, 0.02, 0.01, 0.005]:
         for (filename, expected_value) in expected:
-            value = value_map[filename]
+            value = value_map.get(filename)
             value_f = to_float(value)
             expected_f = to_float(expected_value)
             line = None
             if value_f is None or expected_f is None:
                 if value != expected_value:
-                    line = '{:40s}: got: {} | expected: {}'.format(
+                    line = '{:45s}: got: {} | expected: {}'.format(
                         filename, value, expected_value)
             else:
                 diff = value_f - expected_f
-                if abs(diff) > 500:
+                if abs(diff) > 900:
                     diff -= 1000
-                if abs(diff) >= precision:
-                    line = '{:40s} {:8.2f} (got: {} | expected: {})'.format(
+                if abs(diff) >= precision and precision > ALLOWED_INACCURACY:
+                    line = '{:42s} {:8.2f} (got: {} | expected: {})'.format(
                         filename, diff, value, expected_value)
             if line is not None and line not in diffs:
+                failed_files.add(filename)
                 diffs.append(line)
+    if diffs:
+        diffs.append(
+            'Failed {} of {} files'.format(len(failed_files), len(filenames)))
     assert '\n'.join(diffs) == ''
 
-    assert captured.out == expected_output
     assert captured.err == ''
 
 
 def to_float(x):
+    if x is None:
+        return None
     try:
         return float(x)
     except ValueError:
