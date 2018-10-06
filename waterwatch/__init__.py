@@ -9,12 +9,8 @@ from typing import (
 import cv2
 import numpy
 
+from . import _params
 from ._colors import BGR_BLACK, BGR_MAGENTA, HlsColor
-from ._params import (
-    DIAL_CENTERS, DIAL_COLOR_RANGE, DIALS_FILE, DIALS_MATCH_THRESHOLD,
-    DIALS_TEMPLATE_SIZE, IMAGE_GLOB, METER_RECT, NEEDLE_ANGLES_OF_ZERO,
-    NEEDLE_CIRCLE_MASK_THICKNESS, NEEDLE_COLOR, NEEDLE_COLOR_RANGE,
-    NEEDLE_DISTS_FROM_DIAL_CENTER, NEGATIVE_MOMENTUM_DIALS)
 from ._types import (
     DialCenter, DialData, FloatPoint, Image, Point, PointAsArray, Rect,
     TemplateMatchResult)
@@ -30,6 +26,8 @@ DEBUG = {
 
 if 'all' in DEBUG:
     DEBUG = {'masks'}
+
+params = _params.load('not-used-yet')
 
 
 def main(argv: Sequence[str] = sys.argv) -> None:
@@ -67,17 +65,17 @@ def get_dial_data() -> Dict[str, DialData]:
 
 def _get_dial_data() -> Dict[str, DialData]:
     result = {}
-    for (name, dial_center) in DIAL_CENTERS.items():
+    for (name, dial_center) in params.dial_centers.items():
         mask = numpy.zeros(
-            shape=DIALS_TEMPLATE_SIZE,
+            shape=params.dials_template_size,
             dtype=numpy.uint8)
         dial_radius = int(round(dial_center.diameter/2.0))
         center = float_point_to_int(dial_center.center)
 
         # Draw two circles to the mask image
-        dist_from_center = NEEDLE_DISTS_FROM_DIAL_CENTER[name]
+        dist_from_center = params.needle_dists_from_dial_center[name]
         start_radius = dial_radius + dist_from_center
-        circle_thickness = NEEDLE_CIRCLE_MASK_THICKNESS[name]
+        circle_thickness = params.needle_circle_mask_thickness[name]
         for i in [0, circle_thickness - 1]:
             cv2.circle(mask, center, start_radius + i, 255)
 
@@ -152,7 +150,7 @@ def get_meter_image(filename: str) -> Image:
 
 
 def crop_meter(img: Image) -> Image:
-    return crop_rect(img, METER_RECT)
+    return crop_rect(img, params.meter_rect)
 
 
 def get_average_meter_image(files: Iterable[str]) -> Image:
@@ -167,7 +165,7 @@ def get_norm_images(files: Iterable[str]) -> Iterator[Image]:
 
 def get_image_filenames() -> List[str]:
     return [
-        path for path in glob.glob(IMAGE_GLOB)
+        path for path in glob.glob(params.image_glob)
         if all(bad_filename not in path for bad_filename in [
                 '20180814021309-01-e01.jpg',
                 '20180814021310-00-e02.jpg',
@@ -224,7 +222,7 @@ def get_meter_value(fn: str) -> Dict[str, float]:
             momentum_x += (-1 if x < 0 else 1) * x**2
             momentum_y += (-1 if y < 0 else 1) * y**2
 
-        mom_sign = -1 if dial_name in NEGATIVE_MOMENTUM_DIALS else 1
+        mom_sign = -1 if dial_name in params.negative_momentum_dials else 1
         momentum_vector = (mom_sign * momentum_x, mom_sign * momentum_y)
         momentum_angle = get_angle_by_vector(momentum_vector)
 
@@ -280,7 +278,7 @@ def get_meter_value(fn: str) -> Dict[str, float]:
         angle = (
             sum(a * d for (a, d) in center_angles_and_sqdists) /
             sum(d for (_a, d) in center_angles_and_sqdists))
-        fixed_angle = angle - (NEEDLE_ANGLES_OF_ZERO[dial_name] / 360.0)
+        fixed_angle = angle - (params.needle_angles_of_zero[dial_name] / 360.0)
         dial_positions[dial_name] = (10.0 * fixed_angle) % 10.0
 
     if unreadable_dials:
@@ -297,7 +295,7 @@ def get_meter_value(fn: str) -> Dict[str, float]:
 
     result = dial_positions.copy()
 
-    if set(dial_positions.keys()) == set(DIAL_CENTERS.keys()):
+    if set(dial_positions.keys()) == set(params.dial_centers.keys()):
         result['value'] = determine_value_by_dial_positions(dial_positions)
     if DEBUG:
         cv2.imshow('debug: ' + fn.rsplit('/', 1)[-1], scale_image(debug, 2))
@@ -312,7 +310,7 @@ def get_needle_points(
     dial_color = get_dial_color(dials_hls, dial_data)
 
     needle_mask_orig = get_mask_by_color(
-        dials_hls, dial_color, DIAL_COLOR_RANGE[dial_data.name])
+        dials_hls, dial_color, params.dial_color_range[dial_data.name])
     kernel = numpy.ones((3, 3), numpy.uint8)
     needle_mask_dilated = cv2.dilate(needle_mask_orig, kernel)
     needle_mask_de = cv2.erode(needle_mask_dilated, kernel)
@@ -384,7 +382,8 @@ def get_angle_by_vector(vector: FloatPoint) -> Optional[float]:
 
 
 def get_needles_mask_by_color(hls_image: Image) -> Image:
-    return get_mask_by_color(hls_image, NEEDLE_COLOR, NEEDLE_COLOR_RANGE)
+    return get_mask_by_color(hls_image, params.needle_color,
+                             params.needle_color_range)
 
 
 def find_dials(img_hls: Image, fn: str) -> TemplateMatchResult:
@@ -392,7 +391,7 @@ def find_dials(img_hls: Image, fn: str) -> TemplateMatchResult:
     lightness = cv2.split(img_hls)[1]
     match_result = match_template(lightness, template)
 
-    if match_result.max_val < DIALS_MATCH_THRESHOLD:
+    if match_result.max_val < params.dials_match_threshold:
         raise ValueError('Dials not found from {} (match val = {})'.format(
             fn, match_result.max_val))
 
@@ -405,8 +404,9 @@ _dials_template: Optional[Image] = None
 def get_dials_template() -> Image:
     global _dials_template
     if _dials_template is None:
-        _dials_template = cv2.imread(DIALS_FILE, cv2.IMREAD_GRAYSCALE)
+        _dials_template = cv2.imread(params.dials_file, cv2.IMREAD_GRAYSCALE)
         if _dials_template is None:
-            raise IOError("Cannot read dials template: {}".format(DIALS_FILE))
-    assert _dials_template.shape == DIALS_TEMPLATE_SIZE
+            raise IOError(
+                "Cannot read dials template: {}".format(params.dials_file))
+    assert _dials_template.shape == params.dials_template_size
     return _dials_template
