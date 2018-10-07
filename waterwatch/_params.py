@@ -25,10 +25,11 @@ class Params:
         self.dials_match_threshold = 20000000
         self.dials_template_size = (119, 188)  # (height, width)
 
+        self.hue_shift = 128
+
         #: Color of the dial needles
         #:
-        #: Note: The hue values in these colors are shifted by
-        #: DEFAULT_HUE_SHIFT
+        #: Note: The hue values in these colors are shifted by hue_shift
         self.dial_color_range = {
             '0.0001': HlsColor(10, 35, 65),
             '0.001': HlsColor(15, 60, 80),
