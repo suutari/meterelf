@@ -1,0 +1,5 @@
+#!/bin/bash
+if [ -z "$(docker images -q waterwatch)" ]; then
+    docker build --tag waterwatch .
+fi
+./docker-run-with-x11 -e DEBUG="$DEBUG" waterwatch python3 -m waterwatch "$@"

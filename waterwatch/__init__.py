@@ -9,12 +9,8 @@ from typing import (
 import cv2
 import numpy
 
+from . import _params
 from ._colors import BGR_BLACK, BGR_MAGENTA, HlsColor
-from ._params import (
-    DIAL_CENTERS, DIAL_COLOR_RANGE, DIALS_FILE, DIALS_MATCH_THRESHOLD,
-    DIALS_TEMPLATE_SIZE, IMAGE_GLOB, METER_RECT, NEEDLE_ANGLES_OF_ZERO,
-    NEEDLE_CIRCLE_MASK_THICKNESS, NEEDLE_COLOR, NEEDLE_COLOR_RANGE,
-    NEEDLE_DIST_FROM_DIAL_CENTER, NEGATIVE_MOMENTUM_DIALS)
 from ._types import (
     DialCenter, DialData, FloatPoint, Image, Point, PointAsArray, Rect,
     TemplateMatchResult)
@@ -32,14 +28,24 @@ if 'all' in DEBUG:
     DEBUG = {'masks'}
 
 
+_Params = _params.Params
+
+
 def main(argv: Sequence[str] = sys.argv) -> None:
-    filenames = argv[1:]
+    if len(argv) < 2:
+        raise SystemExit('Usage: {} PARAMETERS_FILE [IMAGE_FILE...]'.format(
+            argv[0] if argv else 'waterwatch'))
+    params_file = argv[1]
+    filenames = argv[2:]
+
+    params = _params.load(params_file)
+
     for filename in filenames:
         print(filename, end='')  # noqa
         meter_values: Optional[Dict[str, float]] = None
         error: Optional[Exception] = None
         try:
-            meter_values = get_meter_value(filename)
+            meter_values = get_meter_value(params, filename)
         except Exception as e:
             error = e
             if DEBUG:
@@ -58,25 +64,26 @@ def main(argv: Sequence[str] = sys.argv) -> None:
 _dial_data: Optional[Dict[str, DialData]] = None
 
 
-def get_dial_data() -> Dict[str, DialData]:
+def get_dial_data(params: _Params) -> Dict[str, DialData]:
     global _dial_data
     if _dial_data is None:
-        _dial_data = _get_dial_data()
+        _dial_data = _get_dial_data(params)
     return _dial_data
 
 
-def _get_dial_data() -> Dict[str, DialData]:
+def _get_dial_data(params: _Params) -> Dict[str, DialData]:
     result = {}
-    for (name, dial_center) in DIAL_CENTERS.items():
+    for (name, dial_center) in params.dial_centers.items():
         mask = numpy.zeros(
-            shape=DIALS_TEMPLATE_SIZE,
+            shape=params.dials_template_size,
             dtype=numpy.uint8)
         dial_radius = int(round(dial_center.diameter/2.0))
         center = float_point_to_int(dial_center.center)
 
         # Draw two circles to the mask image
-        start_radius = dial_radius + NEEDLE_DIST_FROM_DIAL_CENTER
-        circle_thickness = NEEDLE_CIRCLE_MASK_THICKNESS[name]
+        dist_from_center = params.needle_dists_from_dial_center[name]
+        start_radius = dial_radius + dist_from_center
+        circle_thickness = params.needle_circle_mask_thickness[name]
         for i in [0, circle_thickness - 1]:
             cv2.circle(mask, center, start_radius + i, 255)
 
@@ -101,21 +108,25 @@ def _get_dial_data() -> Dict[str, DialData]:
 
 
 def find_dial_centers(
+        params: _Params,
         files: Union[int, Iterable[str]] = 255,
 ) -> List[DialCenter]:
-    avg_meter = get_average_meter_image(get_files(files))
-    return find_dial_centers_from_image(avg_meter)
+    avg_meter = get_average_meter_image(params, get_files(params, files))
+    return find_dial_centers_from_image(params, avg_meter)
 
 
-def find_dial_centers_from_image(avg_meter: Image) -> List[DialCenter]:
-    avg_meter_hls = convert_to_hls(avg_meter)
+def find_dial_centers_from_image(
+        params: _Params,
+        avg_meter: Image,
+) -> List[DialCenter]:
+    avg_meter_hls = convert_to_hls(params, avg_meter)
 
-    match_result = find_dials(avg_meter_hls, '<average_image>')
+    match_result = find_dials(params, avg_meter_hls, '<average_image>')
     dials_hls = crop_rect(avg_meter_hls, match_result.rect)
 
-    needles_mask = get_needles_mask_by_color(dials_hls)
+    needles_mask = get_needles_mask_by_color(params, dials_hls)
     if DEBUG:
-        debug_img = convert_to_bgr(dials_hls)
+        debug_img = convert_to_bgr(params, dials_hls)
         color_mask = cv2.merge((needles_mask, needles_mask, needles_mask * 0))
         debug_img = cv2.addWeighted(debug_img, 1, color_mask, 0.50, 0)
         cv2.imshow('debug', debug_img)
@@ -133,9 +144,12 @@ def find_dial_centers_from_image(avg_meter: Image) -> List[DialCenter]:
     return sorted(dial_centers, key=(lambda x: x.center[0]))
 
 
-def get_files(files: Union[int, Iterable[str]] = 255) -> Iterable[str]:
+def get_files(
+        params: _Params,
+        files: Union[int, Iterable[str]] = 255
+) -> Iterable[str]:
     if isinstance(files, int):
-        return random.sample(get_image_filenames(), files)
+        return random.sample(get_image_filenames(params), files)
     return files
 
 
@@ -143,30 +157,30 @@ def float_point_to_int(point: FloatPoint) -> Point:
     return (int(round(point[0])), int(round(point[1])))
 
 
-def get_meter_image(filename: str) -> Image:
+def get_meter_image(params: _Params, filename: str) -> Image:
     img = cv2.imread(filename)
     if img is None:
         raise Exception("Unable to read image file: {}".format(filename))
-    return crop_meter(img)
+    return crop_meter(params, img)
 
 
-def crop_meter(img: Image) -> Image:
-    return crop_rect(img, METER_RECT)
+def crop_meter(params: _Params, img: Image) -> Image:
+    return crop_rect(img, params.meter_rect)
 
 
-def get_average_meter_image(files: Iterable[str]) -> Image:
-    norm_images = get_norm_images(files)
+def get_average_meter_image(params: _Params, files: Iterable[str]) -> Image:
+    norm_images = get_norm_images(params, files)
     norm_avg_img = calculate_average_of_norm_images(norm_images)
     return denormalize_image(norm_avg_img)
 
 
-def get_norm_images(files: Iterable[str]) -> Iterator[Image]:
-    return (normalize_image(get_meter_image_t(x)) for x in files)
+def get_norm_images(params: _Params, files: Iterable[str]) -> Iterator[Image]:
+    return (normalize_image(get_meter_image_t(params, x)) for x in files)
 
 
-def get_image_filenames() -> List[str]:
+def get_image_filenames(params: _Params) -> List[str]:
     return [
-        path for path in glob.glob(IMAGE_GLOB)
+        path for path in glob.glob(params.image_glob)
         if all(bad_filename not in path for bad_filename in [
                 '20180814021309-01-e01.jpg',
                 '20180814021310-00-e02.jpg',
@@ -174,10 +188,10 @@ def get_image_filenames() -> List[str]:
     ]
 
 
-def get_meter_image_t(fn: str) -> Image:
-    meter_img = get_meter_image(fn)
-    meter_hls = convert_to_hls(meter_img)
-    dials = find_dials(meter_hls, fn)
+def get_meter_image_t(params: _Params, fn: str) -> Image:
+    meter_img = get_meter_image(params, fn)
+    meter_hls = convert_to_hls(params, meter_img)
+    dials = find_dials(params, meter_hls, fn)
     tl = dials.rect.top_left
     m = numpy.array([
         [1, 0, 30 - tl[0]],
@@ -187,10 +201,10 @@ def get_meter_image_t(fn: str) -> Image:
     return cv2.warpAffine(meter_img, m, (w, h))
 
 
-def get_dials_hls(fn: str) -> Image:
-    meter_img = get_meter_image(fn)
-    meter_hls = convert_to_hls(meter_img)
-    match_result = find_dials(meter_hls, fn)
+def get_dials_hls(params: _Params, fn: str) -> Image:
+    meter_img = get_meter_image(params, fn)
+    meter_hls = convert_to_hls(params, meter_img)
+    match_result = find_dials(params, meter_hls, fn)
     dials_hls = crop_rect(meter_hls, match_result.rect)
     return dials_hls
 
@@ -204,16 +218,17 @@ def get_dial_color(dials_hls: Image, dial_data: DialData) -> HlsColor:
     return HlsColor(int(round(h)), int(round(l)), int(round(s)))
 
 
-def get_meter_value(fn: str) -> Dict[str, float]:
-    dials_hls = get_dials_hls(fn)
+def get_meter_value(params: _Params, fn: str) -> Dict[str, float]:
+    dials_hls = get_dials_hls(params, fn)
 
-    debug = convert_to_bgr(dials_hls) if DEBUG else dials_hls
+    debug = convert_to_bgr(params, dials_hls) if DEBUG else dials_hls
 
     dial_positions: Dict[str, float] = {}
+    unreadable_dials: List[str] = []
 
-    for (dial_name, dial_data) in get_dial_data().items():
+    for (dial_name, dial_data) in get_dial_data(params).items():
         (needle_points, needle_mask) = get_needle_points(
-            dials_hls, dial_data, debug)
+            params, dials_hls, dial_data, debug)
 
         momentum_x = 0.0
         momentum_y = 0.0
@@ -222,7 +237,7 @@ def get_meter_value(fn: str) -> Dict[str, float]:
             momentum_x += (-1 if x < 0 else 1) * x**2
             momentum_y += (-1 if y < 0 else 1) * y**2
 
-        mom_sign = -1 if dial_name in NEGATIVE_MOMENTUM_DIALS else 1
+        mom_sign = -1 if dial_name in params.negative_momentum_dials else 1
         momentum_vector = (mom_sign * momentum_x, mom_sign * momentum_y)
         momentum_angle = get_angle_by_vector(momentum_vector)
 
@@ -263,8 +278,8 @@ def get_meter_value(fn: str) -> Dict[str, float]:
             cv2.imshow('debug: ' + fn.rsplit('/', 1)[-1], debug4)
             cv2.waitKey(0)
         if not angles_and_sqdists:
-            raise ValueError(
-                'Cannot determine angle for dial {}'.format(dial_name))
+            unreadable_dials.append(dial_name)
+            continue
         min_angle = min(a for (a, _d) in angles_and_sqdists)
         angles_and_sqdists_r = [
             ((a, d) if abs(a - min_angle) < 0.75 else (a - 1, d))
@@ -278,12 +293,24 @@ def get_meter_value(fn: str) -> Dict[str, float]:
         angle = (
             sum(a * d for (a, d) in center_angles_and_sqdists) /
             sum(d for (_a, d) in center_angles_and_sqdists))
-        fixed_angle = angle - (NEEDLE_ANGLES_OF_ZERO[dial_name] / 360.0)
+        fixed_angle = angle - (params.needle_angles_of_zero[dial_name] / 360.0)
         dial_positions[dial_name] = (10.0 * fixed_angle) % 10.0
+
+    if unreadable_dials:
+        if DEBUG:
+            extra_info = ' (' + ' | '.join(
+                '{}: {}'.format(
+                    k, '{:.2f}'.format(v) if v is not None else '-.--')
+                for (k, v) in sorted(dial_positions.items())) + ')'
+        else:
+            extra_info = ''
+        raise ValueError(
+            'Cannot determine angle for dial {}{}'.format(
+                unreadable_dials[0], extra_info))
 
     result = dial_positions.copy()
 
-    if set(dial_positions.keys()) == set(DIAL_CENTERS.keys()):
+    if set(dial_positions.keys()) == set(params.dial_centers.keys()):
         result['value'] = determine_value_by_dial_positions(dial_positions)
     if DEBUG:
         cv2.imshow('debug: ' + fn.rsplit('/', 1)[-1], scale_image(debug, 2))
@@ -291,6 +318,7 @@ def get_meter_value(fn: str) -> Dict[str, float]:
 
 
 def get_needle_points(
+        params: _Params,
         dials_hls: Image,
         dial_data: DialData,
         debug: Image,
@@ -298,7 +326,7 @@ def get_needle_points(
     dial_color = get_dial_color(dials_hls, dial_data)
 
     needle_mask_orig = get_mask_by_color(
-        dials_hls, dial_color, DIAL_COLOR_RANGE[dial_data.name])
+        dials_hls, dial_color, params.dial_color_range[dial_data.name])
     kernel = numpy.ones((3, 3), numpy.uint8)
     needle_mask_dilated = cv2.dilate(needle_mask_orig, kernel)
     needle_mask_de = cv2.erode(needle_mask_dilated, kernel)
@@ -369,16 +397,21 @@ def get_angle_by_vector(vector: FloatPoint) -> Optional[float]:
         return 0.5 + atan
 
 
-def get_needles_mask_by_color(hls_image: Image) -> Image:
-    return get_mask_by_color(hls_image, NEEDLE_COLOR, NEEDLE_COLOR_RANGE)
+def get_needles_mask_by_color(params: _Params, hls_image: Image) -> Image:
+    return get_mask_by_color(hls_image, params.needle_color,
+                             params.needle_color_range)
 
 
-def find_dials(img_hls: Image, fn: str) -> TemplateMatchResult:
-    template = get_dials_template()
+def find_dials(
+        params: _Params,
+        img_hls: Image,
+        fn: str
+) -> TemplateMatchResult:
+    template = get_dials_template(params)
     lightness = cv2.split(img_hls)[1]
     match_result = match_template(lightness, template)
 
-    if match_result.max_val < DIALS_MATCH_THRESHOLD:
+    if match_result.max_val < params.dials_match_threshold:
         raise ValueError('Dials not found from {} (match val = {})'.format(
             fn, match_result.max_val))
 
@@ -388,11 +421,12 @@ def find_dials(img_hls: Image, fn: str) -> TemplateMatchResult:
 _dials_template: Optional[Image] = None
 
 
-def get_dials_template() -> Image:
+def get_dials_template(params: _Params) -> Image:
     global _dials_template
     if _dials_template is None:
-        _dials_template = cv2.imread(DIALS_FILE, cv2.IMREAD_GRAYSCALE)
+        _dials_template = cv2.imread(params.dials_file, cv2.IMREAD_GRAYSCALE)
         if _dials_template is None:
-            raise IOError("Cannot read dials template: {}".format(DIALS_FILE))
-    assert _dials_template.shape == DIALS_TEMPLATE_SIZE
+            raise IOError(
+                "Cannot read dials template: {}".format(params.dials_file))
+    assert _dials_template.shape == params.dials_template_size
     return _dials_template

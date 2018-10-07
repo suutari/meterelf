@@ -5,10 +5,8 @@ import cv2
 import numpy
 
 from ._colors import HlsColor
+from ._params import Params as _Params
 from ._types import Image, PointAsArray, Rect, TemplateMatchResult
-
-#: Shift hue values by this amount when converting images to HLS
-DEFAULT_HUE_SHIFT = 128
 
 
 def find_non_zero(image: Image) -> List[PointAsArray]:
@@ -67,18 +65,19 @@ def match_template(img: Image, template: Image) -> TemplateMatchResult:
 
 
 def convert_to_hls(
+        params: _Params,
         image: Image,
-        hue_shift: int = DEFAULT_HUE_SHIFT,
 ) -> Image:
+    hue_shift = params.hue_shift
     unshifted_hls_image = cv2.cvtColor(image, cv2.COLOR_BGR2HLS_FULL)
     return unshifted_hls_image + HlsColor(hue_shift, 0, 0)  # type: ignore
 
 
 def convert_to_bgr(
+        params: _Params,
         hls_image: Image,
-        hue_shift: int = DEFAULT_HUE_SHIFT,
 ) -> Image:
-    shifted_hls_image = hls_image - HlsColor(hue_shift, 0, 0)
+    shifted_hls_image = hls_image - HlsColor(params.hue_shift, 0, 0)
     return cv2.cvtColor(shifted_hls_image, cv2.COLOR_HLS2BGR_FULL)
 
 

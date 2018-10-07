@@ -6,6 +6,7 @@ Image = numpy.ndarray
 Point = Tuple[int, int]
 PointAsArray = numpy.ndarray
 FloatPoint = Tuple[float, float]
+Size = Tuple[int, int]
 
 
 class DialCenter(NamedTuple):

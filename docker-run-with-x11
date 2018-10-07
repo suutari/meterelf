@@ -1,0 +1,26 @@
+#!/bin/bash
+
+set -e
+
+if [ -z "$DISPLAY" ]; then
+    echo >&2 "DISPLAY not set, cannot run."
+    exit 1
+fi
+
+xauthf=$HOME/.xauth-docker
+x11tmp=/tmp/.X11-unix
+codedir=$(cd "$(dirname "$0")" && pwd)
+
+rm -f "$xauthf"
+xauth nlist $DISPLAY | \
+    sed 's/^..../ffff/' | \
+    xauth -f "$xauthf" nmerge - 2>/dev/null
+docker run --rm -it \
+       -e DISPLAY=$DISPLAY \
+       -e XAUTHORITY="$xauthf" \
+       -e NO_AT_BRIDGE=1 \
+       -v "$x11tmp":"$x11tmp" \
+       -v "$xauthf":"$xauthf" \
+       -v "$codedir":/code \
+       --ipc=host \
+       "$@"

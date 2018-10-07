@@ -5,3 +5,4 @@
 -e .
 numpy==1.14.5             # via opencv-python
 opencv-python==3.4.2.17   # via waterwatch
+pyyaml==3.13              # via waterwatch
