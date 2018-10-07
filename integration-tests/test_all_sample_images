@@ -5,7 +5,7 @@ mydir=$(cd $(dirname "$0") && pwd)
 base=$mydir/test_all_sample_images
 
 cd "$mydir/.."
-params=dummy_params
+params=sample-images/params.yml
 files=$(ls -1 sample-images/*.jpg | sort)
 
 echo "Testing with $(echo "$files" | wc -l) files"

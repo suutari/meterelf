@@ -13,7 +13,7 @@ mydir = os.path.abspath(os.path.dirname(__file__))
 project_dir = os.path.abspath(os.path.join(mydir, os.path.pardir))
 expected_all_output_file = os.path.join(mydir, 'all_sample_images_stdout.txt')
 
-params = _params.load('dummy')
+params_fn = os.path.join('sample-images', 'params.yml')
 
 mocks = []
 
@@ -40,7 +40,7 @@ def test_main_with_all_sample_images(capsys):
     with cwd_as(project_dir):
         all_sample_images = sorted(
             glob(os.path.join('sample-images', '*.jpg')))
-        waterwatch.main(['waterwatch', 'dummy_params'] + all_sample_images)
+        waterwatch.main(['waterwatch', params_fn] + all_sample_images)
 
     captured = capsys.readouterr()
 
@@ -108,6 +108,7 @@ def cwd_as(directory):
 @pytest.mark.parametrize('mode', ['normal', 'debug'])
 def test_find_dial_centers(mode):
     debug_value = {'masks'} if mode == 'debug' else {}
+    params = _params.load(params_fn)
     files = waterwatch.get_image_filenames(params)
     with patch.object(waterwatch, 'DEBUG', new=debug_value):
         result = waterwatch.find_dial_centers(params, files)
@@ -143,7 +144,7 @@ def test_raises_on_debug_mode(capsys, filename):
     with patch.object(waterwatch, 'DEBUG', new={'1'}):
         with cwd_as(project_dir):
             with pytest.raises(Exception) as excinfo:
-                waterwatch.main(['waterwatch', 'dummy_params'] + [image_path])
+                waterwatch.main(['waterwatch', params_fn] + [image_path])
             assert str(excinfo.value) == error_msg.format(fn=image_path)
     captured = capsys.readouterr()
     assert captured.out.startswith(image_path + ': ')
@@ -164,7 +165,7 @@ def test_output_in_debug_mode(capsys):
     image_path = os.path.join(project_dir, 'sample-images', filename)
     with patch.object(waterwatch, 'DEBUG', new={'1'}):
         with cwd_as(project_dir):
-            waterwatch.main(['waterwatch', 'dummy_params'] + [image_path])
+            waterwatch.main(['waterwatch', params_fn] + [image_path])
     captured = capsys.readouterr()
     basic_data = image_path + ': 253.62'
     assert captured.out.startswith(basic_data)

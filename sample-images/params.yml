@@ -1,0 +1,55 @@
+image_glob: "*.jpg"
+
+meter_rect: {top_left: [50, 160], bottom_right: [300, 410]}
+
+dials_template: "../dials_gray.png"
+dials_template_match_threshold: 20000000
+dials_template_size: [188, 119]
+
+# Value to add to all hue values of the HLS colors
+#
+# The hue ("h") values in all HLS colors specified in this file are
+# shifted by this amount
+hue_shift: 128
+
+# Color of the dial needles to use when detecting their location
+needle_color: {h: 125, l: 80, s: 130}
+needle_color_range: {h: 9, l: 45, s: 35}
+
+needle_data:
+
+  - name: "0.0001"
+    color_range: {h: 10, l: 35, s: 65}
+    dist_from_center: 4
+    circle_thickness: 10
+    angle_of_zero: -4.5  # degrees
+    center: [37.3, 63.4]
+    diameter: 16
+    negative_momentum: no
+
+  - name: "0.001"
+    color_range: {h: 15, l: 60, s: 80}
+    dist_from_center: 4
+    circle_thickness: 10
+    angle_of_zero: -4.5  # degrees
+    center: [94.0, 86.0]
+    diameter: 15
+    negative_momentum: yes
+
+  - name: "0.01"
+    color_range: {h: 10, l: 45, s: 50}
+    dist_from_center: 4
+    circle_thickness: 6
+    angle_of_zero: -4.5  # degrees
+    center: [135.0, 71.9]
+    diameter: 11
+    negative_momentum: no
+
+  - name: "0.1"
+    color_range: {h: 15, l: 55, s: 60}
+    dist_from_center: 4
+    circle_thickness: 9
+    angle_of_zero: -4.5  # degrees
+    center: [160.9, 36.5]
+    diameter: 12
+    negative_momentum: no
