@@ -11,9 +11,9 @@ from waterwatch import _params
 
 mydir = os.path.abspath(os.path.dirname(__file__))
 project_dir = os.path.abspath(os.path.join(mydir, os.path.pardir))
-expected_all_output_file = os.path.join(mydir, 'all_sample_images_stdout.txt')
+expected_all_output_file = os.path.join(mydir, 'sample-images1_stdout.txt')
 
-params_fn = os.path.join('sample-images', 'params.yml')
+params_fn = os.path.join('sample-images1', 'params.yml')
 
 mocks = []
 
@@ -39,7 +39,7 @@ def test_main_with_all_sample_images(capsys):
 
     with cwd_as(project_dir):
         old_dir = os.getcwd()
-        os.chdir('sample-images')
+        os.chdir('sample-images1')
         try:
             all_sample_images = sorted(glob('*.jpg'))
             waterwatch.main(['waterwatch', 'params.yml'] + all_sample_images)
@@ -144,7 +144,7 @@ EXPECTED_CENTER_DATA = [
 ])
 def test_raises_on_debug_mode(capsys, filename):
     error_msg = EXPECTED_ERRORS[filename]
-    image_path = os.path.join(project_dir, 'sample-images', filename)
+    image_path = os.path.join(project_dir, 'sample-images1', filename)
     with patch.object(waterwatch, 'DEBUG', new={'1'}):
         with cwd_as(project_dir):
             with pytest.raises(Exception) as excinfo:
@@ -166,7 +166,7 @@ EXPECTED_ERRORS = {
 
 def test_output_in_debug_mode(capsys):
     filename = '20180814215230-01-e136.jpg'
-    image_path = os.path.join(project_dir, 'sample-images', filename)
+    image_path = os.path.join(project_dir, 'sample-images1', filename)
     with patch.object(waterwatch, 'DEBUG', new={'1'}):
         with cwd_as(project_dir):
             waterwatch.main(['waterwatch', params_fn] + [image_path])

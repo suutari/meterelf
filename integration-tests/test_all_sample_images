@@ -4,7 +4,7 @@ set -e
 mydir=$(cd $(dirname "$0") && pwd)
 base=$mydir/test_all_sample_images
 
-cd "$mydir/../sample-images"
+cd "$mydir/../sample-images1"
 files=$(ls -1 *.jpg | sort)
 
 echo "Testing with $(echo "$files" | wc -l) files"
