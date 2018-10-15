@@ -38,9 +38,13 @@ def test_main_with_all_sample_images(capsys):
         expected_output = fp.read()
 
     with cwd_as(project_dir):
-        all_sample_images = sorted(
-            glob(os.path.join('sample-images', '*.jpg')))
-        waterwatch.main(['waterwatch', params_fn] + all_sample_images)
+        old_dir = os.getcwd()
+        os.chdir('sample-images')
+        try:
+            all_sample_images = sorted(glob('*.jpg'))
+            waterwatch.main(['waterwatch', 'params.yml'] + all_sample_images)
+        finally:
+            os.chdir(old_dir)
 
     captured = capsys.readouterr()
 
