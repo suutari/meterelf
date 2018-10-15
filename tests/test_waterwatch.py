@@ -33,6 +33,7 @@ ALLOWED_INACCURACY = 0.00
 
 FILENAMES_OF_EXPECTED_OUTPUT = {
     'sample-images1': 'sample-images1_stdout.txt',
+    'sample-images2': 'sample-images2_stdout.txt',
 }
 
 
