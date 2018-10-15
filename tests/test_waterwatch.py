@@ -11,9 +11,8 @@ from waterwatch import _params
 
 mydir = os.path.abspath(os.path.dirname(__file__))
 project_dir = os.path.abspath(os.path.join(mydir, os.path.pardir))
-expected_all_output_file = os.path.join(mydir, 'all_sample_images_stdout.txt')
 
-params_fn = os.path.join('sample-images', 'params.yml')
+params_fn = os.path.join('sample-images1', 'params.yml')
 
 mocks = []
 
@@ -32,24 +31,36 @@ def teardown_module():
 
 ALLOWED_INACCURACY = 0.00
 
+FILENAMES_OF_EXPECTED_OUTPUT = {
+    'sample-images1': 'sample-images1_stdout.txt',
+    'sample-images2': 'sample-images2_stdout.txt',
+}
 
-def test_main_with_all_sample_images(capsys):
+
+@pytest.mark.parametrize('sample_dir', FILENAMES_OF_EXPECTED_OUTPUT.keys())
+def test_main_with_all_sample_images(capsys, sample_dir):
+    filename_of_expected_output = FILENAMES_OF_EXPECTED_OUTPUT[sample_dir]
+    expected_all_output_file = os.path.join(mydir, filename_of_expected_output)
     with open(expected_all_output_file, 'rt') as fp:
         expected_output = fp.read()
 
     with cwd_as(project_dir):
-        all_sample_images = sorted(
-            glob(os.path.join('sample-images', '*.jpg')))
-        waterwatch.main(['waterwatch', params_fn] + all_sample_images)
+        old_dir = os.getcwd()
+        os.chdir(sample_dir)
+        try:
+            all_sample_images = sorted(glob('*.jpg'))
+            waterwatch.main(['waterwatch', 'params.yml'] + all_sample_images)
+        finally:
+            os.chdir(old_dir)
 
     captured = capsys.readouterr()
 
     result = [
-        line.split(': ')
+        line.split(': ', 1)
         for line in captured.out.splitlines()
     ]
     expected = [
-        line.split(': ')
+        line.split(': ', 1)
         for line in expected_output.splitlines()
     ]
     (filenames, values) = zip(*result)
@@ -140,7 +151,7 @@ EXPECTED_CENTER_DATA = [
 ])
 def test_raises_on_debug_mode(capsys, filename):
     error_msg = EXPECTED_ERRORS[filename]
-    image_path = os.path.join(project_dir, 'sample-images', filename)
+    image_path = os.path.join(project_dir, 'sample-images1', filename)
     with patch.object(waterwatch, 'DEBUG', new={'1'}):
         with cwd_as(project_dir):
             with pytest.raises(Exception) as excinfo:
@@ -162,7 +173,7 @@ EXPECTED_ERRORS = {
 
 def test_output_in_debug_mode(capsys):
     filename = '20180814215230-01-e136.jpg'
-    image_path = os.path.join(project_dir, 'sample-images', filename)
+    image_path = os.path.join(project_dir, 'sample-images1', filename)
     with patch.object(waterwatch, 'DEBUG', new={'1'}):
         with cwd_as(project_dir):
             waterwatch.main(['waterwatch', params_fn] + [image_path])
