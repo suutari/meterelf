@@ -11,7 +11,6 @@ from waterwatch import _params
 
 mydir = os.path.abspath(os.path.dirname(__file__))
 project_dir = os.path.abspath(os.path.join(mydir, os.path.pardir))
-expected_all_output_file = os.path.join(mydir, 'sample-images1_stdout.txt')
 
 params_fn = os.path.join('sample-images1', 'params.yml')
 
@@ -32,14 +31,21 @@ def teardown_module():
 
 ALLOWED_INACCURACY = 0.00
 
+FILENAMES_OF_EXPECTED_OUTPUT = {
+    'sample-images1': 'sample-images1_stdout.txt',
+}
 
-def test_main_with_all_sample_images(capsys):
+
+@pytest.mark.parametrize('sample_dir', FILENAMES_OF_EXPECTED_OUTPUT.keys())
+def test_main_with_all_sample_images(capsys, sample_dir):
+    filename_of_expected_output = FILENAMES_OF_EXPECTED_OUTPUT[sample_dir]
+    expected_all_output_file = os.path.join(mydir, filename_of_expected_output)
     with open(expected_all_output_file, 'rt') as fp:
         expected_output = fp.read()
 
     with cwd_as(project_dir):
         old_dir = os.getcwd()
-        os.chdir('sample-images1')
+        os.chdir(sample_dir)
         try:
             all_sample_images = sorted(glob('*.jpg'))
             waterwatch.main(['waterwatch', 'params.yml'] + all_sample_images)
