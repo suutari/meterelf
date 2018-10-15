@@ -61,14 +61,15 @@ def main(argv: Sequence[str] = sys.argv) -> None:
         print(output)  # noqa
 
 
-_dial_data: Optional[Dict[str, DialData]] = None
+_dial_data_map: Dict[int, Dict[str, DialData]] = {}
 
 
 def get_dial_data(params: _Params) -> Dict[str, DialData]:
-    global _dial_data
-    if _dial_data is None:
-        _dial_data = _get_dial_data(params)
-    return _dial_data
+    dial_data = _dial_data_map.get(id(params))
+    if dial_data is None:
+        dial_data = _get_dial_data(params)
+        _dial_data_map[id(params)] = dial_data
+    return dial_data
 
 
 def _get_dial_data(params: _Params) -> Dict[str, DialData]:
@@ -418,15 +419,16 @@ def find_dials(
     return match_result
 
 
-_dials_template: Optional[Image] = None
+_dials_template_map: Dict[int, Image] = {}
 
 
 def get_dials_template(params: _Params) -> Image:
-    global _dials_template
-    if _dials_template is None:
-        _dials_template = cv2.imread(params.dials_file, cv2.IMREAD_GRAYSCALE)
-        if _dials_template is None:
+    dials_template = _dials_template_map.get(id(params))
+    if dials_template is None:
+        dials_template = cv2.imread(params.dials_file, cv2.IMREAD_GRAYSCALE)
+        if dials_template is None:
             raise IOError(
                 "Cannot read dials template: {}".format(params.dials_file))
-    assert _dials_template.shape == params.dials_template_size
-    return _dials_template
+        _dials_template_map[id(params)] = dials_template
+    assert dials_template.shape == params.dials_template_size
+    return dials_template
