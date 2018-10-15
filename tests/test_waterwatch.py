@@ -55,11 +55,11 @@ def test_main_with_all_sample_images(capsys, sample_dir):
     captured = capsys.readouterr()
 
     result = [
-        line.split(': ')
+        line.split(': ', 1)
         for line in captured.out.splitlines()
     ]
     expected = [
-        line.split(': ')
+        line.split(': ', 1)
         for line in expected_output.splitlines()
     ]
     (filenames, values) = zip(*result)
