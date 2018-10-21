@@ -1,12 +1,39 @@
 import functools
-from typing import Iterable, List, Tuple
+import math
+from typing import Iterable, List, Optional, Tuple
 
 import cv2
 import numpy
 
 from ._colors import HlsColor
 from ._params import Params as _Params
-from ._types import Image, PointAsArray, Rect, TemplateMatchResult
+from ._types import (
+    FloatPoint, Image, Point, PointAsArray, Rect, TemplateMatchResult)
+
+
+def float_point_to_int(point: FloatPoint) -> Point:
+    return (int(round(point[0])), int(round(point[1])))
+
+
+def get_angle_by_vector(vector: FloatPoint) -> Optional[float]:
+    (x, y) = vector
+    if x == 0 and y == 0:
+        return None
+    elif x > 0 and y == 0:
+        return 0.25
+    elif x < 0 and y == 0:
+        return 0.75
+
+    atan = math.atan(abs(x) / abs(y)) / (2 * math.pi)
+    if x >= 0 and y >= 0:
+        return 0.5 - atan
+    elif x >= 0 and y < 0:
+        return atan
+    elif x < 0 and y < 0:
+        return 1.0 - atan
+    else:
+        assert x < 0 and y >= 0
+        return 0.5 + atan
 
 
 def find_non_zero(image: Image) -> List[PointAsArray]:
