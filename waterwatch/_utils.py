@@ -16,24 +16,30 @@ def float_point_to_int(point: FloatPoint) -> Point:
 
 
 def get_angle_by_vector(vector: FloatPoint) -> Optional[float]:
-    (x, y) = vector
-    if x == 0 and y == 0:
-        return None
-    elif x > 0 and y == 0:
-        return 0.25
-    elif x < 0 and y == 0:
-        return 0.75
+    """
+    Get angle of a vector as a float from 0.0 to 1.0.
 
-    atan = math.atan(abs(x) / abs(y)) / (2 * math.pi)
-    if x >= 0 and y >= 0:
-        return 0.5 - atan
-    elif x >= 0 and y < 0:
-        return atan
-    elif x < 0 and y < 0:
-        return 1.0 - atan
-    else:
-        assert x < 0 and y >= 0
-        return 0.5 + atan
+        0.875    0    0.125
+              H  A  B
+               \ | /
+                \|/
+        0.75  G--O--C  0.25
+                /|\
+               / | \
+              F  E  D
+        0.625   0.5   0.375
+
+    >>> H = (-1, -1); A = (0, -1); B = (1, -1)
+    >>> G = (-1, 0);  O = (0, 0);  C = (1, 0)
+    >>> F = (-1, 1);  E = (0, 1);  D = (1, 1)
+    >>> [get_angle_by_vector(x) for x in [A, B, C, D, E, F, G, H, O]]
+    [0.0, 0.125, 0.25, 0.375, 0.5, 0.625, 0.75, 0.875, None]
+    """
+    (x, y) = vector
+    if y == 0:
+        return 0.25 if x > 0 else 0.75 if x < 0 else None
+    atan = math.atan(x / y) / (2 * math.pi)
+    return (-atan + (0.5 if y > 0 else 0.0)) % 1.0
 
 
 def find_non_zero(image: Image) -> List[PointAsArray]:
