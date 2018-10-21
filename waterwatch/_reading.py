@@ -7,7 +7,7 @@ import numpy
 from ._colors import BGR_BLACK, BGR_MAGENTA, HlsColor
 from ._debug import DEBUG
 from ._dial_data import get_dial_data
-from ._image import get_dials_hls
+from ._image import ImageFile
 from ._params import Params as _Params
 from ._types import DialData, Image, PointAsArray, Rect
 from ._utils import (
@@ -15,8 +15,9 @@ from ._utils import (
     get_angle_by_vector, get_mask_by_color, scale_image)
 
 
-def get_meter_value(params: _Params, fn: str) -> Dict[str, float]:
-    dials_hls = get_dials_hls(params, fn)
+def get_meter_value(imgf: ImageFile) -> Dict[str, float]:
+    params = imgf.params
+    dials_hls = imgf.get_dials_hls()
 
     debug = convert_to_bgr(params, dials_hls) if DEBUG else dials_hls
 
@@ -72,7 +73,7 @@ def get_meter_value(params: _Params, fn: str) -> Dict[str, float]:
             dial_center = float_point_to_int((cent[0] * 4, cent[1] * 4))
             cv2.circle(debug4, dial_center, 0, BGR_BLACK)
             cv2.circle(debug4, dial_center, 6, BGR_MAGENTA)
-            cv2.imshow('debug: ' + fn.rsplit('/', 1)[-1], debug4)
+            cv2.imshow('debug: ' + imgf.filename.rsplit('/', 1)[-1], debug4)
             cv2.waitKey(0)
         if not angles_and_sqdists:
             unreadable_dials.append(dial_name)
@@ -110,7 +111,8 @@ def get_meter_value(params: _Params, fn: str) -> Dict[str, float]:
     if set(dial_positions.keys()) == set(params.dial_centers.keys()):
         result['value'] = determine_value_by_dial_positions(dial_positions)
     if DEBUG:
-        cv2.imshow('debug: ' + fn.rsplit('/', 1)[-1], scale_image(debug, 2))
+        cv2.imshow('debug: ' + imgf.filename.rsplit('/', 1)[-1],
+                   scale_image(debug, 2))
     return result
 
 

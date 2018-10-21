@@ -3,6 +3,7 @@ from typing import Dict, Optional, Sequence
 
 from . import _params
 from ._debug import DEBUG
+from ._image import ImageFile
 from ._reading import get_meter_value
 
 
@@ -19,8 +20,9 @@ def main(argv: Sequence[str] = sys.argv) -> None:
         print(filename, end='')  # noqa
         meter_values: Optional[Dict[str, float]] = None
         error: Optional[Exception] = None
+        imgf = ImageFile(filename, params)
         try:
-            meter_values = get_meter_value(params, filename)
+            meter_values = get_meter_value(imgf)
         except Exception as e:
             error = e
             if DEBUG:

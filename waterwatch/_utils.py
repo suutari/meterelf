@@ -97,11 +97,7 @@ def match_template(img: Image, template: Image) -> TemplateMatchResult:
     return TemplateMatchResult(Rect(top_left, bottom_right), max_val)
 
 
-def convert_to_hls(
-        params: _Params,
-        image: Image,
-) -> Image:
-    hue_shift = params.hue_shift
+def convert_to_hls(image: Image, hue_shift: int = 0) -> Image:
     unshifted_hls_image = cv2.cvtColor(image, cv2.COLOR_BGR2HLS_FULL)
     return unshifted_hls_image + HlsColor(hue_shift, 0, 0)  # type: ignore
 

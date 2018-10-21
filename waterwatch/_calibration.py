@@ -5,12 +5,12 @@ from typing import Iterable, Iterator, List, Union
 import cv2
 
 from ._debug import DEBUG
-from ._image import find_dials, get_meter_image_t
+from ._image import ImageFile
 from ._params import Params as _Params
 from ._types import DialCenter, Image
 from ._utils import (
-    calculate_average_of_norm_images, convert_to_bgr, convert_to_hls,
-    crop_rect, denormalize_image, get_mask_by_color, normalize_image)
+    calculate_average_of_norm_images, convert_to_bgr, denormalize_image,
+    get_mask_by_color, normalize_image)
 
 
 def find_dial_centers(
@@ -34,10 +34,8 @@ def find_dial_centers_from_image(
         params: _Params,
         avg_meter: Image,
 ) -> List[DialCenter]:
-    avg_meter_hls = convert_to_hls(params, avg_meter)
-
-    match_result = find_dials(params, avg_meter_hls, '<average_image>')
-    dials_hls = crop_rect(avg_meter_hls, match_result.rect)
+    avg_meter_imgf = ImageFile('<average_image>', params, avg_meter)
+    dials_hls = avg_meter_imgf.get_dials_hls()
 
     needles_mask = get_needles_mask_by_color(params, dials_hls)
     if DEBUG:
@@ -66,7 +64,9 @@ def get_average_meter_image(params: _Params, files: Iterable[str]) -> Image:
 
 
 def get_norm_images(params: _Params, files: Iterable[str]) -> Iterator[Image]:
-    return (normalize_image(get_meter_image_t(params, x)) for x in files)
+    return (
+        normalize_image(ImageFile(x, params).get_bgr_image_t())
+        for x in files)
 
 
 def get_image_filenames(params: _Params) -> List[str]:
