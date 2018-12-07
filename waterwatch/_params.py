@@ -86,17 +86,17 @@ class TypeCheckedGetter:
         self.data = data
         self.base_dir = base_dir
 
-    def text(self, name: str, default: Optional[str] = None) -> str:
-        return self._get_value(str, name, default)
+    def text(self, name: str) -> str:
+        return self._get_value(str, name)
 
-    def boolean(self, name: str, default: Optional[bool] = None) -> bool:
-        return self._get_value(bool, name, default)
+    def boolean(self, name: str) -> bool:
+        return self._get_value(bool, name)
 
-    def integer(self, name: str, default: Optional[int] = None) -> int:
-        return self._get_value(int, name, default)
+    def integer(self, name: str) -> int:
+        return self._get_value(int, name)
 
-    def float_num(self, name: str, default: Optional[float] = None) -> float:
-        return self._get_value(float, name, default)
+    def float_num(self, name: str) -> float:
+        return self._get_value(float, name)
 
     def list(
             self,
@@ -104,7 +104,7 @@ class TypeCheckedGetter:
             tp: Type[_T],
             length: Optional[int] = None,
     ) -> List[_T]:
-        items = self._get_value(list, name, None)
+        items = self._get_value(list, name)
         for (n, item) in enumerate(items):
             if not isinstance(item, tp):
                 raise TypeError('Item {} in {} is not {}'.format(
@@ -114,14 +114,14 @@ class TypeCheckedGetter:
                 name, length))
         return items
 
-    def filename(self, name: str, default: Optional[str] = None) -> str:
-        fn = self.glob(name, default)
+    def filename(self, name: str) -> str:
+        fn = self.glob(name)
         if not os.path.exists(fn):
             raise FileNotFoundError(fn)
         return fn
 
-    def glob(self, name: str, default: Optional[str] = None) -> str:
-        bn = self.text(name, default)  # basename without path
+    def glob(self, name: str) -> str:
+        bn = self.text(name)  # basename without path
         return os.path.join(self.base_dir, bn) if self.base_dir else bn
 
     def rect(self, name: str) -> Rect:
@@ -145,12 +145,7 @@ class TypeCheckedGetter:
         saturation = hls_data.integer('s')
         return HlsColor(hue, lightness, saturation)
 
-    def _get_value(self, tp: Type[_T], name: str, default: Optional[_T]) -> _T:
-        if name not in self.data:
-            if default is None:
-                raise KeyError(name)
-            return default
-
+    def _get_value(self, tp: Type[_T], name: str) -> _T:
         value = self.data[name]
         if not isinstance(value, tp):
             raise TypeError('{} is not {}'.format(name, tp.__name__))

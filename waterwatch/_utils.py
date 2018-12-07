@@ -1,12 +1,45 @@
 import functools
-from typing import Iterable, List, Tuple
+import math
+from typing import Iterable, List, Optional, Tuple
 
 import cv2
 import numpy
 
 from ._colors import HlsColor
 from ._params import Params as _Params
-from ._types import Image, PointAsArray, Rect, TemplateMatchResult
+from ._types import (
+    FloatPoint, Image, Point, PointAsArray, Rect, TemplateMatchResult)
+
+
+def float_point_to_int(point: FloatPoint) -> Point:
+    return (int(round(point[0])), int(round(point[1])))
+
+
+def get_angle_by_vector(vector: FloatPoint) -> Optional[float]:
+    """
+    Get angle of a vector as a float from 0.0 to 1.0.
+
+        0.875    0    0.125
+              H  A  B
+               \ | /
+                \|/
+        0.75  G--O--C  0.25
+                /|\
+               / | \
+              F  E  D
+        0.625   0.5   0.375
+
+    >>> H = (-1, -1); A = (0, -1); B = (1, -1)
+    >>> G = (-1, 0);  O = (0, 0);  C = (1, 0)
+    >>> F = (-1, 1);  E = (0, 1);  D = (1, 1)
+    >>> [get_angle_by_vector(x) for x in [A, B, C, D, E, F, G, H, O]]
+    [0.0, 0.125, 0.25, 0.375, 0.5, 0.625, 0.75, 0.875, None]
+    """
+    (x, y) = vector
+    if y == 0:
+        return 0.25 if x > 0 else 0.75 if x < 0 else None
+    atan = math.atan(x / y) / (2 * math.pi)
+    return (-atan + (0.5 if y > 0 else 0.0)) % 1.0
 
 
 def find_non_zero(image: Image) -> List[PointAsArray]:
@@ -64,11 +97,7 @@ def match_template(img: Image, template: Image) -> TemplateMatchResult:
     return TemplateMatchResult(Rect(top_left, bottom_right), max_val)
 
 
-def convert_to_hls(
-        params: _Params,
-        image: Image,
-) -> Image:
-    hue_shift = params.hue_shift
+def convert_to_hls(image: Image, hue_shift: int = 0) -> Image:
     unshifted_hls_image = cv2.cvtColor(image, cv2.COLOR_BGR2HLS_FULL)
     return unshifted_hls_image + HlsColor(hue_shift, 0, 0)  # type: ignore
 

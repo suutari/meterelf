@@ -6,8 +6,7 @@ from unittest.mock import patch
 
 import pytest
 
-import waterwatch
-from waterwatch import _params
+from waterwatch import _calibration, _main, _params
 
 mydir = os.path.abspath(os.path.dirname(__file__))
 project_dir = os.path.abspath(os.path.join(mydir, os.path.pardir))
@@ -49,7 +48,7 @@ def test_main_with_all_sample_images(capsys, sample_dir):
         os.chdir(sample_dir)
         try:
             all_sample_images = sorted(glob('*.jpg'))
-            waterwatch.main(['waterwatch', 'params.yml'] + all_sample_images)
+            _main.main(['waterwatch', 'params.yml'] + all_sample_images)
         finally:
             os.chdir(old_dir)
 
@@ -120,9 +119,9 @@ def cwd_as(directory):
 def test_find_dial_centers(mode):
     debug_value = {'masks'} if mode == 'debug' else {}
     params = _params.load(params_fn)
-    files = waterwatch.get_image_filenames(params)
-    with patch.object(waterwatch, 'DEBUG', new=debug_value):
-        result = waterwatch.find_dial_centers(params, files)
+    files = _calibration.get_image_filenames(params)
+    with patch.object(_calibration, 'DEBUG', new=debug_value):
+        result = _calibration.find_dial_centers(params, files)
     assert len(result) == 4
     sorted_result = sorted(result, key=(lambda x: x.center[0]))
 
@@ -152,10 +151,10 @@ EXPECTED_CENTER_DATA = [
 def test_raises_on_debug_mode(capsys, filename):
     error_msg = EXPECTED_ERRORS[filename]
     image_path = os.path.join(project_dir, 'sample-images1', filename)
-    with patch.object(waterwatch, 'DEBUG', new={'1'}):
+    with patch.object(_main, 'DEBUG', new={'1'}):
         with cwd_as(project_dir):
             with pytest.raises(Exception) as excinfo:
-                waterwatch.main(['waterwatch', params_fn] + [image_path])
+                _main.main(['waterwatch', params_fn] + [image_path])
             assert str(excinfo.value) == error_msg.format(fn=image_path)
     captured = capsys.readouterr()
     assert captured.out.startswith(image_path + ': ')
@@ -174,9 +173,9 @@ EXPECTED_ERRORS = {
 def test_output_in_debug_mode(capsys):
     filename = '20180814215230-01-e136.jpg'
     image_path = os.path.join(project_dir, 'sample-images1', filename)
-    with patch.object(waterwatch, 'DEBUG', new={'1'}):
+    with patch.object(_main, 'DEBUG', new={'1'}):
         with cwd_as(project_dir):
-            waterwatch.main(['waterwatch', params_fn] + [image_path])
+            _main.main(['waterwatch', params_fn] + [image_path])
     captured = capsys.readouterr()
     basic_data = image_path + ': 253.62'
     assert captured.out.startswith(basic_data)
