@@ -30,7 +30,7 @@ def main(argv: Sequence[str] = sys.argv) -> None:
                 raise
 
         value = (meter_values or {}).get('value')
-        value_str = '{:06.2f}'.format(value) if value else 'UNKNOWN'
+        value_str = '{:06.3f}'.format(value) if value else 'UNKNOWN'
         error_str = ' {}'.format(error) if error else ''
         output = ': {}{}'.format(value_str, error_str)
         if DEBUG:

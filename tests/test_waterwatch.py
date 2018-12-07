@@ -177,7 +177,7 @@ def test_output_in_debug_mode(capsys):
         with cwd_as(project_dir):
             _main.main(['waterwatch', params_fn] + [image_path])
     captured = capsys.readouterr()
-    basic_data = image_path + ': 253.62'
+    basic_data = image_path + ': 253.623'
     assert captured.out.startswith(basic_data)
     debug_data_str = captured.out[len(basic_data):].replace("'", '"').strip()
     debug_data = json.loads(debug_data_str)
@@ -187,7 +187,7 @@ def test_output_in_debug_mode(capsys):
     assert abs(debug_data['0.001'] - 3.3) < 0.05
     assert abs(debug_data['0.01'] - 5.1) < 0.05
     assert abs(debug_data['0.1'] - 2.4) < 0.05
-    assert abs(debug_data['value'] - 253.623) < 0.0005
+    assert abs(debug_data['value'] - 253.62306) < 0.000005
     assert captured.err == ''
 
 
