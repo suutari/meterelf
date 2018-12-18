@@ -7,3 +7,8 @@ DEBUG = {
 
 if 'all' in DEBUG:
     DEBUG = {'masks'}
+
+
+def reraise_if_debug_on() -> None:
+    if DEBUG:
+        raise

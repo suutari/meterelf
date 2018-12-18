@@ -1,10 +1,8 @@
 import sys
-from typing import Dict, Optional, Sequence
+from typing import Sequence
 
-from . import _debug, _params
-from ._debug import DEBUG
-from ._image import ImageFile
-from ._reading import get_meter_value
+from . import _debug
+from ._api import get_meter_values
 
 
 def main(argv: Sequence[str] = sys.argv) -> None:
@@ -14,25 +12,9 @@ def main(argv: Sequence[str] = sys.argv) -> None:
     params_file = argv[1]
     filenames = argv[2:]
 
-    params = _params.load(params_file)
-
-    for filename in filenames:
-        print(filename, end='')  # noqa
-        meter_values: Optional[Dict[str, float]] = None
-        error: Optional[Exception] = None
-        imgf = ImageFile(filename, params)
-        try:
-            meter_values = get_meter_value(imgf)
-        except Exception as e:
-            error = e
-            if _debug.DEBUG:
-                print(': {}'.format(e))  # noqa
-                raise
-
-        value = (meter_values or {}).get('value')
-        value_str = '{:07.3f}'.format(value) if value else 'UNKNOWN'
-        error_str = ' {}'.format(error) if error else ''
-        output = ': {}{}'.format(value_str, error_str)
-        if _debug.DEBUG:
-            output += ' {!r}'.format(meter_values)
-        print(output)  # noqa
+    for data in get_meter_values(params_file, filenames):
+        print(data.filename, end='')  # noqa
+        value_str = '{:07.3f}'.format(data.value) if data.value else ''
+        error_str = 'UNKNOWN {}'.format(data.error) if data.error else ''
+        extra = ' {!r}'.format(data.meter_values) if _debug.DEBUG else ''
+        print(f': {value_str}{error_str}{extra}')  # noqa
