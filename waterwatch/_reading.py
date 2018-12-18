@@ -4,8 +4,8 @@ from typing import Dict, List, Tuple
 import cv2
 import numpy
 
+from . import _debug
 from ._colors import BGR_BLACK, BGR_MAGENTA, HlsColor
-from ._debug import DEBUG
 from ._dial_data import get_dial_data
 from ._image import ImageFile
 from ._params import Params as _Params
@@ -19,7 +19,7 @@ def get_meter_value(imgf: ImageFile) -> Dict[str, float]:
     params = imgf.params
     dials_hls = imgf.get_dials_hls()
 
-    debug = convert_to_bgr(params, dials_hls) if DEBUG else dials_hls
+    debug = convert_to_bgr(params, dials_hls) if _debug.DEBUG else dials_hls
 
     dial_positions: Dict[str, float] = {}
     unreadable_dials: List[str] = []
@@ -39,7 +39,7 @@ def get_meter_value(imgf: ImageFile) -> Dict[str, float]:
         momentum_vector = (mom_sign * momentum_x, mom_sign * momentum_y)
         momentum_angle = get_angle_by_vector(momentum_vector)
 
-        if DEBUG:
+        if _debug.DEBUG:
             mom_scale = math.sqrt(momentum_x**2 + momentum_y**2)
             center = dial_data.center
             mom_x = center[0] + 24 * mom_sign * momentum_x / mom_scale
@@ -52,7 +52,7 @@ def get_meter_value(imgf: ImageFile) -> Dict[str, float]:
         angles_and_sqdists: List[Tuple[float, float]] = []
         for outer_point in outer_points:
             (x, y) = outer_point - dial_data.center
-            if DEBUG:
+            if _debug.DEBUG:
                 point = (outer_point[0], outer_point[1])
                 cv2.circle(debug, point, 0, (0, 128, 128))
             angle = get_angle_by_vector((x, y))
@@ -63,11 +63,11 @@ def get_meter_value(imgf: ImageFile) -> Dict[str, float]:
                     abs(abs(angle - momentum_angle) - 1))
                 if angle_dist_from_mom < 0.25:
                     angles_and_sqdists.append((angle, (x**2 + y**2)))
-                    if DEBUG:
+                    if _debug.DEBUG:
                         coords = (outer_point[0], outer_point[1])
                         cv2.circle(debug, coords, 0, (0, 255, 255))
 
-        if DEBUG:
+        if _debug.DEBUG:
             debug4 = scale_image(debug, 4)
             cent = dial_data.center
             dial_center = float_point_to_int((cent[0] * 4, cent[1] * 4))
@@ -95,7 +95,7 @@ def get_meter_value(imgf: ImageFile) -> Dict[str, float]:
         dial_positions[dial_name] = (10.0 * fixed_angle) % 10.0
 
     if unreadable_dials:
-        if DEBUG:
+        if _debug.DEBUG:
             extra_info = ' (' + ' | '.join(
                 '{}: {}'.format(
                     k, '{:.2f}'.format(v) if v is not None else '-.--')
@@ -110,7 +110,7 @@ def get_meter_value(imgf: ImageFile) -> Dict[str, float]:
 
     if set(dial_positions.keys()) == set(params.dial_centers.keys()):
         result['value'] = determine_value_by_dial_positions(dial_positions)
-    if DEBUG:
+    if _debug.DEBUG:
         cv2.imshow('debug: ' + imgf.filename.rsplit('/', 1)[-1],
                    scale_image(debug, 2))
     return result
@@ -141,7 +141,7 @@ def get_needle_points(
 
     contour = sorted(contours, key=cv2.contourArea)[-1]
     if cv2.contourArea(contour) > 100:
-        if DEBUG:
+        if _debug.DEBUG:
             cv2.drawContours(debug, [contour], -1, (255, 255, 0), -1)
         needle_mask = needle_mask_de.copy()
         needle_mask.fill(0)

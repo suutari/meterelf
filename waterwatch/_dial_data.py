@@ -3,7 +3,7 @@ from typing import Dict
 import cv2
 import numpy
 
-from ._debug import DEBUG
+from . import _debug
 from ._params import Params as _Params
 from ._types import DialData
 from ._utils import float_point_to_int
@@ -47,9 +47,9 @@ def _get_dial_data(params: _Params) -> Dict[str, DialData]:
         cv2.floodFill(mask, fill_mask, center, 255)
         result[name] = DialData(name, dial_center.center, mask, circle_mask)
 
-        if 'masks' in DEBUG:
+        if 'masks' in _debug.DEBUG:
             cv2.imshow('mask of ' + name, mask)
             cv2.imshow('circle_mask of ' + name, circle_mask)
-    if 'masks' in DEBUG:
+    if 'masks' in _debug.DEBUG:
         cv2.waitKey(0)
     return result

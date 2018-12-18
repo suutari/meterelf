@@ -6,7 +6,7 @@ from unittest.mock import patch
 
 import pytest
 
-from waterwatch import _calibration, _main, _params
+from waterwatch import _calibration, _debug, _main, _params
 
 mydir = os.path.abspath(os.path.dirname(__file__))
 project_dir = os.path.abspath(os.path.join(mydir, os.path.pardir))
@@ -120,7 +120,7 @@ def test_find_dial_centers(mode):
     debug_value = {'masks'} if mode == 'debug' else {}
     params = _params.load(params_fn)
     files = _calibration.get_image_filenames(params)
-    with patch.object(_calibration, 'DEBUG', new=debug_value):
+    with patch.object(_debug, 'DEBUG', new=debug_value):
         result = _calibration.find_dial_centers(params, files)
     assert len(result) == 4
     sorted_result = sorted(result, key=(lambda x: x.center[0]))
@@ -151,7 +151,7 @@ EXPECTED_CENTER_DATA = [
 def test_raises_on_debug_mode(capsys, filename):
     error_msg = EXPECTED_ERRORS[filename]
     image_path = os.path.join(project_dir, 'sample-images1', filename)
-    with patch.object(_main, 'DEBUG', new={'1'}):
+    with patch.object(_debug, 'DEBUG', new={'1'}):
         with cwd_as(project_dir):
             with pytest.raises(Exception) as excinfo:
                 _main.main(['waterwatch', params_fn] + [image_path])
@@ -173,7 +173,7 @@ EXPECTED_ERRORS = {
 def test_output_in_debug_mode(capsys):
     filename = '20180814215230-01-e136.jpg'
     image_path = os.path.join(project_dir, 'sample-images1', filename)
-    with patch.object(_main, 'DEBUG', new={'1'}):
+    with patch.object(_debug, 'DEBUG', new={'1'}):
         with cwd_as(project_dir):
             _main.main(['waterwatch', params_fn] + [image_path])
     captured = capsys.readouterr()

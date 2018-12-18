@@ -1,7 +1,7 @@
 import sys
 from typing import Dict, Optional, Sequence
 
-from . import _params
+from . import _debug, _params
 from ._debug import DEBUG
 from ._image import ImageFile
 from ._reading import get_meter_value
@@ -25,7 +25,7 @@ def main(argv: Sequence[str] = sys.argv) -> None:
             meter_values = get_meter_value(imgf)
         except Exception as e:
             error = e
-            if DEBUG:
+            if _debug.DEBUG:
                 print(': {}'.format(e))  # noqa
                 raise
 
@@ -33,6 +33,6 @@ def main(argv: Sequence[str] = sys.argv) -> None:
         value_str = '{:07.3f}'.format(value) if value else 'UNKNOWN'
         error_str = ' {}'.format(error) if error else ''
         output = ': {}{}'.format(value_str, error_str)
-        if DEBUG:
+        if _debug.DEBUG:
             output += ' {!r}'.format(meter_values)
         print(output)  # noqa

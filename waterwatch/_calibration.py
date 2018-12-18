@@ -4,7 +4,7 @@ from typing import Iterable, Iterator, List, Union
 
 import cv2
 
-from ._debug import DEBUG
+from . import _debug
 from ._image import ImageFile
 from ._params import Params as _Params
 from ._types import DialCenter, Image
@@ -38,7 +38,7 @@ def find_dial_centers_from_image(
     dials_hls = avg_meter_imgf.get_dials_hls()
 
     needles_mask = get_needles_mask_by_color(params, dials_hls)
-    if DEBUG:
+    if _debug.DEBUG:
         debug_img = convert_to_bgr(params, dials_hls)
         color_mask = cv2.merge((needles_mask, needles_mask, needles_mask * 0))
         debug_img = cv2.addWeighted(debug_img, 1, color_mask, 0.50, 0)
