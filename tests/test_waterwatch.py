@@ -157,8 +157,7 @@ def test_raises_on_debug_mode(capsys, filename):
                 _main.main(['waterwatch', params_fn] + [image_path])
             assert str(excinfo.value) == error_msg.format(fn=image_path)
     captured = capsys.readouterr()
-    assert captured.out.startswith(image_path + ': ')
-    assert captured.out.endswith('\n')
+    assert captured.out == ''
     assert captured.err == ''
 
 

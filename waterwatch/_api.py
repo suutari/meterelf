@@ -26,8 +26,6 @@ def get_meter_values(
             meter_values = get_meter_value(imgf)
         except Exception as e:
             error = e
-            if _debug.DEBUG:
-                print('{}: {}'.format(filename, e))  # noqa
             _debug.reraise_if_debug_on()
 
         value = meter_values.get('value')
