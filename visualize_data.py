@@ -1,15 +1,14 @@
 #!/usr/bin/env python3
 
 import argparse
-import glob
-import os
 import re
+import sqlite3
 import sys
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from decimal import Decimal
 from typing import (
-    Callable, Iterator, List, NamedTuple, Optional, Sequence, Tuple)
+    Callable, Iterator, List, NamedTuple, Optional, Sequence, Tuple, cast)
 
 import pytz
 from dateutil.parser import parse as parse_datetime
@@ -125,30 +124,30 @@ class CumulativeGroupedData(GroupedData):
 
 def main(argv: Sequence[str] = sys.argv) -> None:
     args = parse_args(argv)
+    value_db = ValueDatabase(args.db_path, args.start_from)
     if args.show_ignores:
-        print_ignores()
+        print_ignores(value_db)
     else:
-        first_thousand = (
-            args.first_thousand if args.first_thousand is not None else
-            get_first_thousand_value())
         if args.show_raw_data:
-            print_raw_data(first_thousand)
+            print_raw_data(value_db)
         elif args.show_influx_data:
-            print_influx_data(first_thousand)
+            print_influx_data(value_db)
         else:
             visualize(
-                first_thousand=first_thousand,
+                value_db=value_db,
                 resolution=args.resolution,
                 warn=(print_warning if args.verbose else ignore_warning))
 
 
 def parse_args(argv: Sequence[str]) -> argparse.Namespace:
     parser = argparse.ArgumentParser()
-    parser.add_argument('first_thousand', type=int, default=None, nargs='?')
+    parser.add_argument('db_path', type=str, default=None)
     parser.add_argument('--verbose', '-v', action='store_true')
     parser.add_argument('--show-ignores', '-i', action='store_true')
     parser.add_argument('--show-raw-data', '-R', action='store_true')
     parser.add_argument('--show-influx-data', '-I', action='store_true')
+    parser.add_argument('--start-from', '-s', default=START_FROM,
+                        type=parse_datetime)
     parser.add_argument('--resolution', '-r', default='day', choices=[
         'second', 'three-seconds', 'five-seconds', 'minute', 'hour',
         'day', 'week', 'month',
@@ -169,19 +168,13 @@ def parse_args(argv: Sequence[str]) -> argparse.Namespace:
     return args
 
 
-def get_first_thousand_value() -> int:
-    if os.path.exists('first-thousand.txt'):
-        return int(read_file('first-thousand.txt'))
-    return 0
-
-
 def read_file(path: str) -> str:
     with open(path, 'rt') as fp:
         return fp.read()
 
 
-def print_ignores() -> None:
-    gatherer = DataGatherer(0, warn=ignore_warning)
+def print_ignores(value_db: 'ValueDatabase') -> None:
+    gatherer = DataGatherer(value_db, warn=ignore_warning)
     for x in gatherer.get_parsed_lines():
         status = (
             'OK' if (x.reading and not x.reading.correction) else
@@ -194,20 +187,20 @@ def print_ignores() -> None:
         print(f'{status} {x.line}{reason_suffix}')
 
 
-def print_raw_data(first_thousand: int) -> None:
-    for line in generate_table_data(first_thousand):
+def print_raw_data(value_db: 'ValueDatabase') -> None:
+    for line in generate_table_data(value_db):
         print('\t'.join(line))
 
 
-def print_influx_data(first_thousand: int) -> None:
-    for line in generate_influx_data(first_thousand):
+def print_influx_data(value_db: 'ValueDatabase') -> None:
+    for line in generate_influx_data(value_db):
         print(line)
 
 
-def generate_table_data(first_thousand: int) -> Iterator[List[str]]:
+def generate_table_data(value_db: 'ValueDatabase') -> Iterator[List[str]]:
     header_done = False
 
-    for (dt, data) in generate_raw_data(first_thousand):
+    for (dt, data) in generate_raw_data(value_db):
         if not header_done:
             yield ['time'] + [key for (key, _value) in data]
             header_done = True
@@ -216,17 +209,17 @@ def generate_table_data(first_thousand: int) -> Iterator[List[str]]:
         yield [ts] + [value for (_key, value) in data]
 
 
-def generate_influx_data(first_thousand: int) -> Iterator[str]:
-    for (dt, data) in generate_raw_data(first_thousand):
+def generate_influx_data(value_db: 'ValueDatabase') -> Iterator[str]:
+    for (dt, data) in generate_raw_data(value_db):
         vals = ','.join(f'{key}={value}' for (key, value) in data if value)
         ts = int(Decimal(f'{dt:%s.%f}') * (10**9))
         yield f'water {vals} {ts}'
 
 
 def generate_raw_data(
-        first_thousand: int,
+        value_db: 'ValueDatabase',
 ) -> Iterator[Tuple[datetime, List[Tuple[str, str]]]]:
-    gatherer = DataGatherer(first_thousand, warn=ignore_warning)
+    gatherer = DataGatherer(value_db, warn=ignore_warning)
 
     for x in gatherer.get_readings():
         data: List[Tuple[str, str]] = [
@@ -254,11 +247,11 @@ def ignore_warning(text: str) -> None:
 
 
 def visualize(
-        first_thousand: int,
+        value_db: 'ValueDatabase',
         resolution: str,
         warn: Callable[[str], None] = ignore_warning,
 ) -> None:
-    data = DataGatherer(first_thousand, resolution, warn)
+    data = DataGatherer(value_db, resolution, warn)
     for line in data.get_visualization():
         print(line)
 
@@ -266,11 +259,11 @@ def visualize(
 class DataGatherer:
     def __init__(
             self,
-            first_thousand: int,
+            value_db: 'ValueDatabase',
             resolution: str = 'day',
             warn: Optional[Callable[[str], None]] = None,
     ) -> None:
-        self.first_thousand: int = first_thousand
+        self.value_db = value_db
         self._warn_func: Callable[[str], None] = warn or print_warning
         self.resolution: str = resolution
 
@@ -326,16 +319,19 @@ class DataGatherer:
     def _truncate_by_month(self, dt: datetime) -> datetime:
         fmt = self._dt_format
         dt_str = dt.strftime(self._dt_format)
-        return datetime.strptime(dt_str + ' 1', fmt + ' %d')
+        truncated = datetime.strptime(dt_str + ' 1', fmt + ' %d')
+        return truncated.replace(tzinfo=dt.tzinfo)
 
     def _truncate_by_week(self, dt: datetime) -> datetime:
         fmt = self._dt_format
         dt_str = dt.strftime(self._dt_format)
-        return datetime.strptime(dt_str + ' 1', fmt + ' %u')
+        truncated = datetime.strptime(dt_str + ' 1', fmt + ' %u')
+        return truncated.replace(tzinfo=dt.tzinfo)
 
     def _truncate_by_day(self, dt: datetime) -> datetime:
         fmt = self._dt_format
-        return datetime.strptime(dt.strftime(fmt), fmt)
+        truncated = datetime.strptime(dt.strftime(fmt), fmt)
+        return truncated.replace(tzinfo=dt.tzinfo)
 
     def _truncate_by_step(self, dt: datetime) -> datetime:
         secs_since_epoch = (dt - EPOCH).total_seconds()
@@ -345,7 +341,7 @@ class DataGatherer:
     def _step_timestamp(self, dt: datetime) -> datetime:
         if self.resolution == 'month':
             (y, m) = divmod(12 * dt.year + (dt.month - 1) + 1, 12)
-            return datetime(year=y, month=(m + 1), day=1)
+            return datetime(year=y, month=(m + 1), day=1, tzinfo=dt.tzinfo)
         return self._truncate_timestamp(dt) + self._step
 
     def get_group(self, dt: datetime) -> str:
@@ -498,7 +494,7 @@ class DataGatherer:
                 yield parsed_line.reading
 
     def get_parsed_lines(self) -> Iterator[ParsedLine]:
-        thousands = self.first_thousand
+        thousands = self.value_db.get_first_thousand()
         lv = None  # Last Value
         lfv = None  # Last Full Value
         ldt = None  # Last Date Time
@@ -509,7 +505,9 @@ class DataGatherer:
             self.warn(reason, line)
             return ParsedLine.create_ignore(line, reason)
 
-        for (preparsed1, preparsed2) in self.get_preparsed_value_lines():
+        preparsed_lines = self.get_preparsed_value_lines()
+
+        for (preparsed1, preparsed2) in preparsed_lines:
             (dt, line, f, fn_data, v_str, v) = preparsed1
             next_v = preparsed2.value if preparsed2 else None
 
@@ -611,32 +609,44 @@ class DataGatherer:
             result_buffer.pop(0)
             return result
 
-        for line in self.get_value_lines():
-            (filename, value_str) = line.split(': ', 1)
-
+        for (filename, value_str, error_str) in self.value_db.get_values():
+            line = f'{filename}: {value_str}{error_str}'
             fn_data = parse_filename(filename)
             dt = fn_data.timestamp
-
-            if dt < START_FROM:
-                continue
-
-            value = float(value_str) if 'UNKNOWN' not in value_str else None
+            value = float(value_str) if value_str else None
 
             if len(result_buffer) >= 5:
                 yield pop_from_buffer()
 
             push_to_buffer(PreparsedLine(
-                dt, line, filename, fn_data, value_str, value))
+                dt, line, filename, fn_data, error_str, value))
 
         while result_buffer:
             yield pop_from_buffer()
 
-    def get_value_lines(self) -> Iterator[str]:
-        files = (glob.glob('values-*.txt') or glob.glob('*/values-*.txt'))
-        for filename in sorted(files):
-            with open(filename, 'rt') as fp:
-                for line in fp:
-                    yield line.rstrip()
+
+class ValueDatabase:
+    def __init__(self, db_path: str, start_from: datetime) -> None:
+        self.db = sqlite3.connect(db_path)
+        self.start_from = start_from
+
+    def get_first_thousand(self) -> int:
+        iso_date = self.start_from.date().isoformat()
+        cursor = cast(Iterator[Tuple[int]], self.db.execute(
+            'SELECT value FROM watermeter_thousands'
+            ' WHERE iso_date=?', (iso_date,)))
+        for row in cursor:
+            return row[0]
+        raise ValueError(f'No thousand value known for date {iso_date}')
+
+    def get_values(self) -> Iterator[Tuple[str, str, str]]:
+        cursor = cast(Iterator[Tuple[str, str, str]], self.db.execute(
+            'SELECT filename, reading, error'
+            ' FROM watermeter_image'
+            ' WHERE filename >= ?'
+            ' ORDER BY filename',
+            (f'{self.start_from:%Y%m%d_}',)))
+        return cursor
 
 
 def value_mod_diff(v1: float, v2: float) -> float:
