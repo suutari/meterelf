@@ -197,6 +197,11 @@ class ValueDatabase:
         self.db.execute(
             'CREATE UNIQUE INDEX IF NOT EXISTS month_day_fn_idx'
             ' ON watermeter_image(month_dir, day_dir, filename)')
+        self.db.execute(
+            'CREATE TABLE IF NOT EXISTS watermeter_thousands ('
+            ' iso_date VARCHAR(10),'
+            ' value INTEGER'
+            ')')
 
     def commit(self) -> None:
         self.db.commit()
