@@ -224,7 +224,7 @@ def generate_raw_data(
     for x in gatherer.get_readings():
         data: List[Tuple[str, str]] = [
             ('value', f'{x.fv:.3f}'),
-            ('litres_per_second', f'{x.dfv / x.dt.total_seconds():.9f}'
+            ('litres_per_minute', f'{60.0 * x.dfv / x.dt.total_seconds():.9f}'
              if x.dfv is not None and x.dt else ''),
             ('value_diff', f'{x.dfv:.3f}' if x.dfv is not None else ''),
             ('time_diff', f'{x.dt.total_seconds():.2f}'
