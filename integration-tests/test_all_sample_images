@@ -9,12 +9,12 @@ files=$(ls -1 *.jpg | sort)
 
 echo "Testing with $(echo "$files" | wc -l) files"
 
-outdir=$(mktemp -d -t waterwatch_test.XXXXXX)
+outdir=$(mktemp -d -t meterelf_test.XXXXXX)
 
 # Don't stop on errors
 set +e
 
-python3 -m waterwatch params.yml $files >"$outdir/stdout" 2>"$outdir/stderr"
+python3 -m meterelf params.yml $files >"$outdir/stdout" 2>"$outdir/stderr"
 exit_code=$?
 
 diff -u "$base.expected_stdout" "$outdir/stdout"

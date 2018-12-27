@@ -1,7 +1,7 @@
-Waterwatch
-==========
+Meter Elf
+=========
 
-This project implements water meter value reading by computer vision
+This project implements dial meter value reading by computer vision
 using OpenCV with Python.
 
 It currently works just for my configuration with exactly the same

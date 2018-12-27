@@ -6,7 +6,7 @@ from unittest.mock import patch
 
 import pytest
 
-from waterwatch import _calibration, _debug, _main, _params
+from meterelf import _calibration, _debug, _main, _params
 
 mydir = os.path.abspath(os.path.dirname(__file__))
 project_dir = os.path.abspath(os.path.join(mydir, os.path.pardir))
@@ -48,7 +48,7 @@ def test_main_with_all_sample_images(capsys, sample_dir):
         os.chdir(sample_dir)
         try:
             all_sample_images = sorted(glob('*.jpg'))
-            _main.main(['waterwatch', 'params.yml'] + all_sample_images)
+            _main.main(['meterelf', 'params.yml'] + all_sample_images)
         finally:
             os.chdir(old_dir)
 
@@ -154,7 +154,7 @@ def test_raises_on_debug_mode(capsys, filename):
     with patch.object(_debug, 'DEBUG', new={'1'}):
         with cwd_as(project_dir):
             with pytest.raises(Exception) as excinfo:
-                _main.main(['waterwatch', params_fn] + [image_path])
+                _main.main(['meterelf', params_fn] + [image_path])
             assert str(excinfo.value) == error_msg.format(fn=image_path)
     captured = capsys.readouterr()
     assert captured.out == ''
@@ -174,7 +174,7 @@ def test_output_in_debug_mode(capsys):
     image_path = os.path.join(project_dir, 'sample-images1', filename)
     with patch.object(_debug, 'DEBUG', new={'1'}):
         with cwd_as(project_dir):
-            _main.main(['waterwatch', params_fn] + [image_path])
+            _main.main(['meterelf', params_fn] + [image_path])
     captured = capsys.readouterr()
     basic_data = image_path + ': 253.623'
     assert captured.out.startswith(basic_data)

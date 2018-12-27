@@ -8,7 +8,7 @@ from ._api import get_meter_values
 def main(argv: Sequence[str] = sys.argv) -> None:
     if len(argv) < 2:
         raise SystemExit('Usage: {} PARAMETERS_FILE [IMAGE_FILE...]'.format(
-            argv[0] if argv else 'waterwatch'))
+            argv[0] if argv else 'meterelf'))
     params_file = argv[1]
     filenames = argv[2:]
 

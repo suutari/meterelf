@@ -1,0 +1,5 @@
+#!/bin/bash
+if [ -z "$(docker images -q meterelf)" ]; then
+    docker build --tag meterelf .
+fi
+./docker-run-with-x11 -e DEBUG="$DEBUG" meterelf python3 -m meterelf "$@"
