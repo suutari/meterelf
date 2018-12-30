@@ -359,7 +359,7 @@ class DataGatherer:
                 per_year = per_sec * SECONDS_PER_YEAR
                 extra = f' = {per_year / 1000.0 :3.0f}m3/y'
             else:
-                extra = f' = {entry.sum * 1000.0 * 20.0 :6.0f}drops'
+                extra = f' = {entry.sum * 1000.0 * 20.0 :8.0f}drops'
             eurs = entry.sum * EUR_PER_LITRE
             if eurs < 0.1:
                 price_txt = f'    {eurs*100.0:5.2f}c'
