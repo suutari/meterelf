@@ -4,6 +4,7 @@ import os
 import sqlite3
 import sys
 import time
+from datetime import date, timedelta
 from glob import glob
 from itertools import groupby
 from typing import (
@@ -241,15 +242,40 @@ class ValueDatabase:
             ' (?, ?, ?, ?, ?, ?)', entries)
 
     def is_done_with_month(self, month_dir: str) -> bool:
-        return month_dir < '2018-12'  #TODO: Implement
-        #return False  #TODO: Implement
+        last_day = get_last_day_of_month(month_dir)
+        return self.is_done_with_day(month_dir, f'{last_day:02d}')
 
     def is_done_with_day(self, month_dir: str, day_dir: str) -> bool:
+        day_date = parse_month_str(month_dir).replace(day=int(day_dir))
+        age = (date.today() - day_date)
+        if age.days <= 1:
+            return False
         prefix = f"{month_dir.replace('-', '')}{day_dir}_23"
+        if age.days <= 7:
+            prefix += '55'
         result = cast(Iterable[Tuple[int]], list(self.db.execute(
             'SELECT COUNT(*) FROM watermeter_image WHERE filename LIKE ?',
             (prefix + '%',))))
         return list(result)[0][0] > 0
+
+
+def get_last_day_of_month(month_str: str) -> int:
+    d = parse_month_str(month_str)
+    if d.month in (1, 3, 5, 7, 8, 10, 12):
+        return 31
+    elif d.month in (4, 6, 9, 11):
+        return 30
+
+    assert d.month == 2
+    if (d.replace(day=28) + timedelta(days=1)).month == 2:
+        return 29
+    else:
+        return 28
+
+
+def parse_month_str(month_str: str) -> date:
+    (y, m) = month_str.split('-')
+    return date(year=int(y), month=int(m), day=1)
 
 
 T = TypeVar('T')
