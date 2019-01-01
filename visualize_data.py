@@ -336,7 +336,8 @@ class DataGatherer:
     def _truncate_by_step(self, dt: datetime) -> datetime:
         secs_since_epoch = (dt - EPOCH).total_seconds()
         num_steps = divmod(secs_since_epoch, self._step.total_seconds())[0]
-        return EPOCH + (self._step * num_steps)
+        truncated = EPOCH + (self._step * num_steps)
+        return truncated.astimezone(dt.tzinfo) if dt.tzinfo else truncated
 
     def _step_timestamp(self, dt: datetime) -> datetime:
         if self.resolution == 'month':
