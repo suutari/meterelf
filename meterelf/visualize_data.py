@@ -1,21 +1,17 @@
 #!/usr/bin/env python3
 
 import argparse
-import re
-import sqlite3
 import sys
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from decimal import Decimal
 from typing import (
-    Callable, Iterator, List, NamedTuple, Optional, Sequence, Tuple, cast)
+    Callable, Iterator, List, NamedTuple, Optional, Sequence, Tuple)
 
-import pytz
 from dateutil.parser import parse as parse_datetime
 
 from . import value_db
-
-DEFAULT_TZ = pytz.timezone('Europe/Helsinki')
+from ._fnparse import FilenameData
 
 START_FROM = parse_datetime('2018-09-24T00:00:00+03:00')
 THOUSAND_WRAP_THRESHOLD = 700  # litres
@@ -35,13 +31,6 @@ DateTimeConverter = Callable[[datetime], datetime]
 EUR_PER_LITRE = ((1.43 + 2.38) * 1.24) / 1000.0
 
 ZEROS_PER_CUMULATING = 3
-
-
-class FilenameData(NamedTuple):
-    timestamp: datetime
-    event_number: Optional[int]
-    is_snapshot: bool
-    extension: str
 
 
 class PreparsedLine(NamedTuple):
@@ -149,7 +138,7 @@ class ValueGetter:
     def get_first_thousand(self) -> int:
         return self.value_db.get_thousands_for_date(self.start_from.date())
 
-    def get_values(self) -> Iterator[value_db.Entry]:
+    def get_values(self) -> Iterator[value_db.ValueRow]:
         return self.value_db.get_values_from_date(self.start_from.date())
 
 
@@ -625,16 +614,16 @@ class DataGatherer:
             return result
 
         for entry in self.value_getter.get_values():
-            line = f'{entry.filename}: {entry.reading}{entry.error}'
-            fn_data = parse_filename(entry.filename)
-            dt = fn_data.timestamp
-            value = float(entry.reading) if entry.reading else None
+            value_str = (
+                f'{entry.reading:.3f}' if entry.reading is not None else '')
+            line = f'{entry.filename}: {value_str}{entry.error}'
 
             if len(result_buffer) >= 5:
                 yield pop_from_buffer()
 
             push_to_buffer(PreparsedLine(
-                dt, line, entry.filename, fn_data, entry.error, value))
+                entry.timestamp, line, entry.filename,
+                entry.data, value_str or entry.error, entry.reading))
 
         while result_buffer:
             yield pop_from_buffer()
@@ -646,69 +635,6 @@ def value_mod_diff(v1: float, v2: float) -> float:
     """
     diff = v1 - v2
     return min(diff % VALUE_MODULO, (-diff) % VALUE_MODULO)
-
-
-def parse_filename(filename: str) -> FilenameData:
-    m = _FILENAME_RX.match(filename)
-
-    if not m:
-        raise Exception(f'Unknown filename: {filename}')
-
-    parts = m.groupdict()
-
-    # Parse timestamp and timezone
-    fraction_str = _SEQUENCE_NUM_TO_FRACTION_STR[parts['seq']]
-    iso_timestamp_str = '{Y}-{m}-{d}T{H}:{M}:{S}{fraction_str}{tz}'.format(
-        fraction_str=fraction_str, **parts)
-    dt = parse_datetime(iso_timestamp_str)
-    full_dt = dt if dt.tzinfo else DEFAULT_TZ.localize(dt)
-
-    return FilenameData(
-        timestamp=full_dt,
-        event_number=int(parts['evnum']) if parts['evnum'] else None,
-        is_snapshot=(parts['snap'] == 'snapshot'),
-        extension=parts['ext'],
-    )
-
-
-_FILENAME_RX = re.compile(r"""
-^
-(?P<Y>\d\d\d\d)(?P<m>[0-1]\d)(?P<d>[0-3]\d) # date
-_(?P<H>[0-2]\d)(?P<M>[0-5]\d)(?P<S>[0-6]\d) # time
-(?P<tz>([+-]\d\d\d\d)?)                     # timezone or empty
--
-((?P<snap>snapshot))?                       # word "snapshot", if present
-((?P<seq>00|01|(\d+_\d+)))?                 # sequence number, if present
-(-e(?P<evnum>\d+))?                         # event number, if present
-\.(?P<ext>.*)                               # file extension
-$
-""", re.VERBOSE)
-
-_SEQUENCE_NUM_TO_FRACTION_STR = {
-    None: '.0',
-
-    '00': '.0',
-    '01': '.5',
-
-    '00_02': '.0',
-    '01_02': '.5',
-
-    '00_04': '.00',
-    '01_04': '.25',
-    '02_04': '.50',
-    '03_04': '.75',
-
-    '00_10': '.0',
-    '01_10': '.1',
-    '02_10': '.2',
-    '03_10': '.3',
-    '04_10': '.4',
-    '05_10': '.5',
-    '06_10': '.6',
-    '07_10': '.7',
-    '08_10': '.8',
-    '09_10': '.9',
-}
 
 
 BAR_SYMBOLS = [

@@ -4,16 +4,21 @@ import os
 import sqlite3
 import sys
 import time
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, timedelta, tzinfo
 from glob import glob
 from itertools import groupby
 from typing import (
-    Any, Callable, Dict, Iterable, Iterator, NamedTuple, Sequence, Tuple,
-    TypeVar, cast)
+    Any, Callable, Dict, Iterable, Iterator, NamedTuple, Optional, Sequence,
+    Tuple, TypeVar, cast)
+
+import pytz
 
 from . import _api as meterelf
+from ._fnparse import FilenameData, parse_filename
 
 PARAMS_FILE = os.getenv('METERELF_PARAMS_FILE')
+
+DEFAULT_TZ = pytz.timezone('Europe/Helsinki')
 
 
 class Entry(NamedTuple):
@@ -23,6 +28,15 @@ class Entry(NamedTuple):
     reading: str
     error: str
     modified_at: float
+
+
+class ValueRow(NamedTuple):
+    timestamp: datetime
+    reading: Optional[float]
+    error: str
+    filename: str
+    data: FilenameData
+    modified_at: datetime
 
 
 class Row(sqlite3.Row):
@@ -215,7 +229,7 @@ class ValueDatabase:
             return row[0]
         raise ValueError(f'No thousand value known for date {iso_date}')
 
-    def get_values_from_date(self, value: date) -> Iterator[Entry]:
+    def get_values_from_date(self, value: date) -> Iterator[ValueRow]:
         cursor = cast(Iterator[Row], self.db.execute(
             'SELECT month_dir, day_dir, filename, reading, error, modified_at'
             ' FROM watermeter_image'
@@ -223,7 +237,7 @@ class ValueDatabase:
             ' ORDER BY filename',
             (f'{value:%Y%m%d_}',)))
         for row in cursor:
-            yield Entry(*row)
+            yield entry_to_value_row(Entry(*row))
 
     def has_filename(self, filename: str) -> bool:
         return (self.count_existing_filenames([filename]) > 0)
@@ -275,6 +289,27 @@ class ValueDatabase:
             'SELECT COUNT(*) FROM watermeter_image WHERE filename LIKE ?',
             (prefix + '%',))))
         return list(result)[0][0] > 0
+
+
+def entry_to_value_row(entry: Entry) -> ValueRow:
+    filename_data = parse_filename(entry.filename, DEFAULT_TZ)
+    return ValueRow(
+        timestamp=filename_data.timestamp,
+        reading=float(entry.reading) if entry.reading else None,
+        error=entry.error,
+        filename=entry.filename,
+        data=filename_data,
+        modified_at=datetime_from_timestamp(entry.modified_at),
+    )
+
+
+def datetime_from_timestamp(
+        timestamp: float,
+        tz: tzinfo = DEFAULT_TZ,
+) -> datetime:
+    naive_dt = datetime.utcfromtimestamp(timestamp)
+    utc_dt = naive_dt.replace(tzinfo=pytz.UTC)
+    return utc_dt.astimezone(tz)
 
 
 def get_last_day_of_month(month_str: str) -> int:
