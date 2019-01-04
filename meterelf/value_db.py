@@ -112,7 +112,6 @@ class _NewImageProcessorForDir:
 
     def _read_data_and_enter_to_db(self, paths: Iterable[str]) -> None:
         image_data = get_data_of_images(paths)
-        timestamp = time.time()
         entries = (
             Entry(
                 month_dir=self._month_dir,
@@ -120,7 +119,7 @@ class _NewImageProcessorForDir:
                 filename=os.path.basename(path),
                 reading=file_data[0],
                 error=file_data[1],
-                modified_at=timestamp)
+                modified_at=time.time())
             for (path, file_data) in image_data.items())
         self.value_db.insert_entries(entries)
         self.value_db.commit()
