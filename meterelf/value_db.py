@@ -4,14 +4,14 @@ import os
 import sqlite3
 import sys
 import time
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from glob import glob
 from itertools import groupby
 from typing import (
     Any, Callable, Dict, Iterable, Iterator, NamedTuple, Sequence, Tuple,
     TypeVar, cast)
 
-import meterelf
+from . import _api as meterelf
 
 PARAMS_FILE = os.getenv('METERELF_PARAMS_FILE')
 
@@ -206,6 +206,25 @@ class ValueDatabase:
 
     def commit(self) -> None:
         self.db.commit()
+
+    def get_thousands_for_date(self, value: date) -> int:
+        iso_date = value.isoformat()
+        cursor = cast(Iterator[Tuple[int]], self.db.execute(
+            'SELECT value FROM watermeter_thousands'
+            ' WHERE iso_date=?', (iso_date,)))
+        for row in cursor:
+            return row[0]
+        raise ValueError(f'No thousand value known for date {iso_date}')
+
+    def get_values_from_date(self, value: date) -> Iterator[Entry]:
+        cursor = cast(Iterator[Row], self.db.execute(
+            'SELECT month_dir, day_dir, filename, reading, error, modified_at'
+            ' FROM watermeter_image'
+            ' WHERE filename >= ?'
+            ' ORDER BY filename',
+            (f'{value:%Y%m%d_}',)))
+        for row in cursor:
+            yield Entry(*row)
 
     def has_filename(self, filename: str) -> bool:
         return (self.count_existing_filenames([filename]) > 0)

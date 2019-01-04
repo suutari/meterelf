@@ -13,6 +13,8 @@ from typing import (
 import pytz
 from dateutil.parser import parse as parse_datetime
 
+from . import value_db
+
 DEFAULT_TZ = pytz.timezone('Europe/Helsinki')
 
 START_FROM = parse_datetime('2018-09-24T00:00:00+03:00')
@@ -124,19 +126,31 @@ class CumulativeGroupedData(GroupedData):
 
 def main(argv: Sequence[str] = sys.argv) -> None:
     args = parse_args(argv)
-    value_db = ValueDatabase(args.db_path, args.start_from)
+    value_getter = ValueGetter(args.db_path, args.start_from)
     if args.show_ignores:
-        print_ignores(value_db)
+        print_ignores(value_getter)
     else:
         if args.show_raw_data:
-            print_raw_data(value_db)
+            print_raw_data(value_getter)
         elif args.show_influx_data:
-            print_influx_data(value_db)
+            print_influx_data(value_getter)
         else:
             visualize(
-                value_db=value_db,
+                value_getter=value_getter,
                 resolution=args.resolution,
                 warn=(print_warning if args.verbose else ignore_warning))
+
+
+class ValueGetter:
+    def __init__(self, db_path: str, start_from: datetime) -> None:
+        self.value_db = value_db.ValueDatabase(db_path)
+        self.start_from = start_from
+
+    def get_first_thousand(self) -> int:
+        return self.value_db.get_thousands_for_date(self.start_from.date())
+
+    def get_values(self) -> Iterator[value_db.Entry]:
+        return self.value_db.get_values_from_date(self.start_from.date())
 
 
 def parse_args(argv: Sequence[str]) -> argparse.Namespace:
@@ -173,8 +187,8 @@ def read_file(path: str) -> str:
         return fp.read()
 
 
-def print_ignores(value_db: 'ValueDatabase') -> None:
-    gatherer = DataGatherer(value_db, warn=ignore_warning)
+def print_ignores(value_getter: ValueGetter) -> None:
+    gatherer = DataGatherer(value_getter, warn=ignore_warning)
     for x in gatherer.get_parsed_lines():
         status = (
             'OK' if (x.reading and not x.reading.correction) else
@@ -187,20 +201,20 @@ def print_ignores(value_db: 'ValueDatabase') -> None:
         print(f'{status} {x.line}{reason_suffix}')
 
 
-def print_raw_data(value_db: 'ValueDatabase') -> None:
-    for line in generate_table_data(value_db):
+def print_raw_data(value_getter: ValueGetter) -> None:
+    for line in generate_table_data(value_getter):
         print('\t'.join(line))
 
 
-def print_influx_data(value_db: 'ValueDatabase') -> None:
-    for line in generate_influx_data(value_db):
+def print_influx_data(value_getter: ValueGetter) -> None:
+    for line in generate_influx_data(value_getter):
         print(line)
 
 
-def generate_table_data(value_db: 'ValueDatabase') -> Iterator[List[str]]:
+def generate_table_data(value_getter: ValueGetter) -> Iterator[List[str]]:
     header_done = False
 
-    for (dt, data) in generate_raw_data(value_db):
+    for (dt, data) in generate_raw_data(value_getter):
         if not header_done:
             yield ['time'] + [key for (key, _value) in data]
             header_done = True
@@ -209,17 +223,17 @@ def generate_table_data(value_db: 'ValueDatabase') -> Iterator[List[str]]:
         yield [ts] + [value for (_key, value) in data]
 
 
-def generate_influx_data(value_db: 'ValueDatabase') -> Iterator[str]:
-    for (dt, data) in generate_raw_data(value_db):
+def generate_influx_data(value_getter: ValueGetter) -> Iterator[str]:
+    for (dt, data) in generate_raw_data(value_getter):
         vals = ','.join(f'{key}={value}' for (key, value) in data if value)
         ts = int(Decimal(f'{dt:%s.%f}') * (10**9))
         yield f'water {vals} {ts}'
 
 
 def generate_raw_data(
-        value_db: 'ValueDatabase',
+        value_getter: ValueGetter,
 ) -> Iterator[Tuple[datetime, List[Tuple[str, str]]]]:
-    gatherer = DataGatherer(value_db, warn=ignore_warning)
+    gatherer = DataGatherer(value_getter, warn=ignore_warning)
 
     for x in gatherer.get_readings():
         data: List[Tuple[str, str]] = [
@@ -247,11 +261,11 @@ def ignore_warning(text: str) -> None:
 
 
 def visualize(
-        value_db: 'ValueDatabase',
+        value_getter: ValueGetter,
         resolution: str,
         warn: Callable[[str], None] = ignore_warning,
 ) -> None:
-    data = DataGatherer(value_db, resolution, warn)
+    data = DataGatherer(value_getter, resolution, warn)
     for line in data.get_visualization():
         print(line)
 
@@ -259,11 +273,11 @@ def visualize(
 class DataGatherer:
     def __init__(
             self,
-            value_db: 'ValueDatabase',
+            value_getter: ValueGetter,
             resolution: str = 'day',
             warn: Optional[Callable[[str], None]] = None,
     ) -> None:
-        self.value_db = value_db
+        self.value_getter = value_getter
         self._warn_func: Callable[[str], None] = warn or print_warning
         self.resolution: str = resolution
 
@@ -495,7 +509,7 @@ class DataGatherer:
                 yield parsed_line.reading
 
     def get_parsed_lines(self) -> Iterator[ParsedLine]:
-        thousands = self.value_db.get_first_thousand()
+        thousands = self.value_getter.get_first_thousand()
         lv = None  # Last Value
         lfv = None  # Last Full Value
         ldt = None  # Last Date Time
@@ -610,44 +624,20 @@ class DataGatherer:
             result_buffer.pop(0)
             return result
 
-        for (filename, value_str, error_str) in self.value_db.get_values():
-            line = f'{filename}: {value_str}{error_str}'
-            fn_data = parse_filename(filename)
+        for entry in self.value_getter.get_values():
+            line = f'{entry.filename}: {entry.reading}{entry.error}'
+            fn_data = parse_filename(entry.filename)
             dt = fn_data.timestamp
-            value = float(value_str) if value_str else None
+            value = float(entry.reading) if entry.reading else None
 
             if len(result_buffer) >= 5:
                 yield pop_from_buffer()
 
             push_to_buffer(PreparsedLine(
-                dt, line, filename, fn_data, error_str, value))
+                dt, line, entry.filename, fn_data, entry.error, value))
 
         while result_buffer:
             yield pop_from_buffer()
-
-
-class ValueDatabase:
-    def __init__(self, db_path: str, start_from: datetime) -> None:
-        self.db = sqlite3.connect(db_path)
-        self.start_from = start_from
-
-    def get_first_thousand(self) -> int:
-        iso_date = self.start_from.date().isoformat()
-        cursor = cast(Iterator[Tuple[int]], self.db.execute(
-            'SELECT value FROM watermeter_thousands'
-            ' WHERE iso_date=?', (iso_date,)))
-        for row in cursor:
-            return row[0]
-        raise ValueError(f'No thousand value known for date {iso_date}')
-
-    def get_values(self) -> Iterator[Tuple[str, str, str]]:
-        cursor = cast(Iterator[Tuple[str, str, str]], self.db.execute(
-            'SELECT filename, reading, error'
-            ' FROM watermeter_image'
-            ' WHERE filename >= ?'
-            ' ORDER BY filename',
-            (f'{self.start_from:%Y%m%d_}',)))
-        return cursor
 
 
 def value_mod_diff(v1: float, v2: float) -> float:
