@@ -5,13 +5,12 @@ import sys
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from decimal import Decimal
-from typing import (
-    Callable, Iterator, List, NamedTuple, Optional, Sequence, Tuple)
+from typing import Callable, Iterator, List, Optional, Sequence, Tuple
 
 from dateutil.parser import parse as parse_datetime
 
-from . import value_db
 from ._fnparse import FilenameData
+from .value_db import ValueDatabase, ValueRow
 
 START_FROM = parse_datetime('2018-09-24T00:00:00+03:00')
 THOUSAND_WRAP_THRESHOLD = 700  # litres
@@ -33,16 +32,7 @@ EUR_PER_LITRE = ((1.43 + 2.38) * 1.24) / 1000.0
 ZEROS_PER_CUMULATING = 3
 
 
-class PreparsedLine(NamedTuple):
-    t: datetime
-    line: str
-    filename: str
-    filename_data: FilenameData
-    value_str: str
-    value: Optional[float]
-
-
-PreparsedLinePair = Tuple[PreparsedLine, Optional[PreparsedLine]]
+ValueRowPair = Tuple[ValueRow, Optional[ValueRow]]
 
 
 @dataclass(frozen=True)
@@ -132,13 +122,13 @@ def main(argv: Sequence[str] = sys.argv) -> None:
 
 class ValueGetter:
     def __init__(self, db_path: str, start_from: datetime) -> None:
-        self.value_db = value_db.ValueDatabase(db_path)
+        self.value_db = ValueDatabase(db_path)
         self.start_from = start_from
 
     def get_first_thousand(self) -> int:
         return self.value_db.get_thousands_for_date(self.start_from.date())
 
-    def get_values(self) -> Iterator[value_db.ValueRow]:
+    def get_values(self) -> Iterator[ValueRow]:
         return self.value_db.get_values_from_date(self.start_from.date())
 
 
@@ -509,11 +499,10 @@ class DataGatherer:
             self.warn(reason, line)
             return ParsedLine.create_ignore(line, reason)
 
-        preparsed_lines = self.get_preparsed_value_lines()
-
-        for (preparsed1, preparsed2) in preparsed_lines:
-            (dt, line, f, fn_data, v_str, v) = preparsed1
-            next_v = preparsed2.value if preparsed2 else None
+        for (row1, row2) in self.get_sorted_value_row_pairs():
+            (dt, v, error, f, fn_data, modified_at) = row1
+            line = f'{f}: {f"{v:.3f}" if v is not None else error}'
+            next_v = row2.reading if row2 else None
 
             if v is None:
                 yield ignore('Unknown reading')
@@ -596,16 +585,16 @@ class DataGatherer:
             lv = v
             ldt = dt
 
-    def get_preparsed_value_lines(self) -> Iterator[PreparsedLinePair]:
-        result_buffer: List[PreparsedLine] = []
+    def get_sorted_value_row_pairs(self) -> Iterator[ValueRowPair]:
+        result_buffer: List[ValueRow] = []
 
-        def push_to_buffer(item: PreparsedLine) -> None:
+        def push_to_buffer(item: ValueRow) -> None:
             result_buffer.append(item)
             result_buffer.sort()
 
-        def pop_from_buffer() -> PreparsedLinePair:
+        def pop_from_buffer() -> ValueRowPair:
             assert result_buffer
-            result: PreparsedLinePair
+            result: ValueRowPair
             if len(result_buffer) >= 2:
                 result = (result_buffer[0], result_buffer[1])
             else:
@@ -614,16 +603,9 @@ class DataGatherer:
             return result
 
         for entry in self.value_getter.get_values():
-            value_str = (
-                f'{entry.reading:.3f}' if entry.reading is not None else '')
-            line = f'{entry.filename}: {value_str}{entry.error}'
-
             if len(result_buffer) >= 5:
                 yield pop_from_buffer()
-
-            push_to_buffer(PreparsedLine(
-                entry.timestamp, line, entry.filename,
-                entry.data, value_str or entry.error, entry.reading))
+            push_to_buffer(entry)
 
         while result_buffer:
             yield pop_from_buffer()
