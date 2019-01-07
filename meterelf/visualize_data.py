@@ -5,7 +5,7 @@ import sys
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from decimal import Decimal
-from typing import Callable, Iterator, List, Optional, Sequence, Tuple
+from typing import Callable, Iterator, List, Optional, Sequence, Tuple, Union
 
 from dateutil.parser import parse as parse_datetime
 
@@ -343,7 +343,15 @@ class DataGatherer:
 
     def get_visualization(self) -> Iterator[str]:
         bar_per_litres = 1.0 / self._litres_per_bar
-        for entry in self.get_grouped_data():
+        for entry in self.get_grouped_data_and_gap_lengths():
+            if isinstance(entry, timedelta):
+                is_long_gap = (entry.total_seconds() >= 30)
+                if is_long_gap:
+                    yield ''
+                yield f'            {entry.total_seconds():7.2f}s = {entry}'
+                if is_long_gap:
+                    yield ''
+                continue
             cum_txt = '{:9.3f}l'.format(entry.cum) if entry.cum else ''
             time_range = entry.max_t - entry.min_t
             extra = ''
@@ -378,6 +386,19 @@ class DataGatherer:
                     price=price_txt,
                     extra=extra,
                     b=make_bar(entry.sum * bar_per_litres))
+
+    def get_grouped_data_and_gap_lengths(
+            self
+    ) -> Iterator[Union[CumulativeGroupedData, timedelta]]:
+        last_entry = None
+        for entry in self.get_grouped_data():
+            if last_entry:
+                last_end = last_entry.max_t
+                this_start = entry.min_t
+                if self._has_time_steps_between(last_end, this_start):
+                    yield this_start - last_end
+            yield entry
+            last_entry = entry
 
     def get_grouped_data(self) -> Iterator[CumulativeGroupedData]:
         last_period = None
@@ -477,10 +498,17 @@ class DataGatherer:
             start: datetime,
             end: datetime,
     ) -> Iterator[datetime]:
-        t = start
+        t = self._step_timestamp(start)
         while t < end:
             yield t
             t = self._step_timestamp(t)
+
+    def _has_time_steps_between(
+            self,
+            start: datetime,
+            end: datetime,
+    ) -> bool:
+        return self._step_timestamp(start) < self._truncate_timestamp(end)
 
     def get_readings(self) -> Iterator[MeterReading]:
         for parsed_line in self.get_parsed_lines():
