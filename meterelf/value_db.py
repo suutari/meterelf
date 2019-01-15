@@ -153,8 +153,8 @@ def get_data_of_images(paths: Iterable[str]) -> Dict[str, Tuple[str, str]]:
 def _format_image_data(
         data: meterelf.MeterImageData,
 ) -> Tuple[str, Tuple[str, str]]:
-    value_str = '{:07.3f}'.format(data.value) if data.value else ''
-    error_str = 'UNKNOWN {}'.format(data.error) if data.error else ''
+    value_str = f'{data.value:07.3f}' if data.value else ''
+    error_str = f'{data.error}' if data.error else ''
     print(f'{data.filename}:\t{value_str}{error_str}')
     return (data.filename, (value_str, error_str))
 
