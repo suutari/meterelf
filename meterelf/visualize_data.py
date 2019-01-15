@@ -23,7 +23,7 @@ VALUE_MAX_DIFFS = {
 }
 MAX_CORRECTION = 0.05  # litres
 
-MAX_SYNTHETIC_READINGS_TO_INSERT = 10
+MAX_SYNTHETIC_VALUES_TO_INSERT = 10
 
 EPOCH = parse_datetime('1970-01-01T00:00:00+00:00')
 SECONDS_PER_YEAR = 60.0 * 60.0 * 24.0 * 365.24
@@ -39,7 +39,7 @@ ValueRowPair = Tuple[ValueRow, Optional[ValueRow]]
 
 
 @dataclass(frozen=True)
-class MeterReading:
+class InterpretedValue:
     t: datetime  # Timestamp
     fv: float  # Full Value
     dt: Optional[timedelta]  # Difference in Timestamp
@@ -51,39 +51,43 @@ class MeterReading:
 
 
 @dataclass(frozen=True)
-class ParsedLine:
+class InterpretedPoint:
     """
-    Line is either ignored or has readings.
+    Point is either ignored or has interpreted value.
     """
-    line: str
+    value_row: ValueRow
     ignore: Optional[str]
-    reading: Optional[MeterReading]
+    value: Optional[InterpretedValue]
 
     @classmethod
-    def create_ignore(cls, line: str, reason: str) -> 'ParsedLine':
-        return cls(line=line, ignore=reason, reading=None)
-
-    @classmethod
-    def create_reading(
+    def create_ignore(
             cls,
-            line: str,
-            filename: str,
-            filename_data: FilenameData,
-            t: datetime,
+            value_row: ValueRow,
+            reason: str,
+    ) -> 'InterpretedPoint':
+        return cls(value_row=value_row, ignore=reason, value=None)
+
+    @classmethod
+    def create_value(
+            cls,
+            value_row: ValueRow,
             fv: float,
             dt: Optional[timedelta],
             dfv: Optional[float],
             correction: float = 0.0,
-    ) -> 'ParsedLine':
+    ) -> 'InterpretedPoint':
         return cls(
-            line=line,
+            value_row=value_row,
             ignore=None,
-            reading=MeterReading(
-                t=t, fv=fv, dt=dt, dfv=dfv,
+            value=InterpretedValue(
+                t=value_row.timestamp,
+                fv=fv,
+                dt=dt,
+                dfv=dfv,
                 correction=correction,
                 synthetic=False,
-                filename=filename,
-                filename_data=filename_data,
+                filename=value_row.filename,
+                filename_data=value_row.data,
             ))
 
 
@@ -171,16 +175,24 @@ def read_file(path: str) -> str:
 
 def print_ignores(value_getter: ValueGetter) -> None:
     gatherer = DataGatherer(value_getter, warn=ignore_warning)
-    for x in gatherer.get_parsed_lines():
+    last_value = 0.0
+    for x in gatherer.get_interpreted_data():
         status = (
-            'OK' if (x.reading and not x.reading.correction) else
-            'c ' if x.reading else
+            'OK' if (x.value and not x.value.correction) else
+            'c ' if x.value else
             '  ')
-        reason_suffix = (
-            f' {x.ignore}' if not x.reading else
-            f' Correction: {x.reading.correction:.3f}' if x.reading.correction
+        suffix = (
+            f' {x.ignore}' if not x.value else
+            f' Correction: {x.value.correction:.3f}' if x.value.correction
             else '')
-        print(f'{status} {x.line}{reason_suffix}')
+        if x.value:
+            last_value = x.value.fv
+        reading = x.value_row.reading
+        reading_str = f'{reading:07.3f}' if reading is not None else ''
+        print(
+            f'{status} {x.value_row.filename:40} {reading_str:7} '
+            f' | {last_value:10.3f}{" " if x.value else "*"} | '
+            f'{x.value_row.error}{suffix}')
 
 
 def print_raw_data(value_getter: ValueGetter) -> None:
@@ -217,7 +229,7 @@ def generate_raw_data(
 ) -> Iterator[Tuple[datetime, List[Tuple[str, str]]]]:
     gatherer = DataGatherer(value_getter, warn=ignore_warning)
 
-    for x in gatherer.get_readings():
+    for x in gatherer.get_values():
         data: List[Tuple[str, str]] = [
             ('value', f'{x.fv:.3f}'),
             ('litres_per_minute', f'{60.0 * x.dfv / x.dt.total_seconds():.9f}'
@@ -263,8 +275,8 @@ class DataGatherer:
         self._warn_func: Callable[[str], None] = warn or print_warning
         self.resolution: str = resolution
 
-    def warn(self, message: str, line: str = '') -> None:
-        self._warn_func(f'{message}{f", in line: {line}" if line else ""}')
+    def warn(self, message: str, filename: str = '') -> None:
+        self._warn_func(f'{message}{f", in {filename}" if filename else ""}')
 
     @property
     def resolution(self) -> str:
@@ -437,64 +449,64 @@ class DataGatherer:
     def _get_grouped_data(self) -> Iterator[GroupedData]:
         last_group = None
         entry = None
-        for reading in self._get_amended_readings():
-            group = self.get_group(reading.t)
+        for value in self._get_amended_values():
+            group = self.get_group(value.t)
             if last_group is None or group != last_group:
                 last_group = group
                 if entry:
                     yield entry
                 entry = GroupedData(
                     group_id=group,
-                    min_t=reading.t,
-                    max_t=reading.t,
-                    min_fv=reading.fv,
-                    max_fv=reading.fv,
-                    sum=(reading.dfv or 0.0),
-                    synthetic_count=(1 if reading.synthetic else 0),
+                    min_t=value.t,
+                    max_t=value.t,
+                    min_fv=value.fv,
+                    max_fv=value.fv,
+                    sum=(value.dfv or 0.0),
+                    synthetic_count=(1 if value.synthetic else 0),
                     source_points=1,
                 )
             else:
-                entry.min_t = min(reading.t, entry.min_t)
-                entry.max_t = max(reading.t, entry.max_t)
-                entry.min_fv = min(reading.fv, entry.min_fv)
-                entry.max_fv = max(reading.fv, entry.max_fv)
-                entry.sum += (reading.dfv or 0.0)
-                entry.synthetic_count += (1 if reading.synthetic else 0)
+                entry.min_t = min(value.t, entry.min_t)
+                entry.max_t = max(value.t, entry.max_t)
+                entry.min_fv = min(value.fv, entry.min_fv)
+                entry.max_fv = max(value.fv, entry.max_fv)
+                entry.sum += (value.dfv or 0.0)
+                entry.synthetic_count += (1 if value.synthetic else 0)
                 entry.source_points += 1
         if entry:
             yield entry
 
-    def _get_amended_readings(self) -> Iterator[MeterReading]:
-        last_reading = None
-        for reading in self.get_readings():
-            if last_reading and reading.dfv > 0.1 and last_reading.dfv > 0:
+    def _get_amended_values(self) -> Iterator[InterpretedValue]:
+        last_value = None
+        for value in self.get_values():
+            if last_value and value.dfv > 0.1 and last_value.dfv > 0:
                 t_steps = list(self._get_time_steps_between(
-                    last_reading.t, reading.t))
+                    last_value.t, value.t))
                 if t_steps:
-                    t_steps = t_steps[-MAX_SYNTHETIC_READINGS_TO_INSERT:]
-                    fv_step = reading.dfv / len(t_steps)
-                    cur_fv = last_reading.fv
+                    t_steps = t_steps[-MAX_SYNTHETIC_VALUES_TO_INSERT:]
+                    fv_step = value.dfv / len(t_steps)
+                    cur_fv = last_value.fv
                     sum_of_amendeds = 0.0
                     for cur_t in t_steps:
                         cur_fv += fv_step
-                        new_reading = MeterReading(
+                        new_value = InterpretedValue(
                             t=cur_t,
                             fv=cur_fv,
-                            dt=(cur_t - last_reading.t),
-                            dfv=(cur_fv - last_reading.fv),
+                            dt=(cur_t - last_value.t),
+                            dfv=(cur_fv - last_value.fv),
                             correction=0.0,
                             synthetic=True,
-                            filename=reading.filename,
-                            filename_data=reading.filename_data,
+                            filename=value.filename,
+                            filename_data=value.filename_data,
                         )
-                        yield new_reading
-                        sum_of_amendeds += new_reading.dfv
-                        last_reading = new_reading
-                    too_much = sum_of_amendeds - reading.dfv
+                        yield new_value
+                        sum_of_amendeds += new_value.dfv
+                        last_value = new_value
+                    too_much = sum_of_amendeds - value.dfv
                     assert abs(too_much) < 0.0001
                     continue
-            yield reading
-            last_reading = reading
+            yield value
+            last_value = value
 
     def _get_time_steps_between(
             self,
@@ -513,26 +525,24 @@ class DataGatherer:
     ) -> bool:
         return self._step_timestamp(start) < self._truncate_timestamp(end)
 
-    def get_readings(self) -> Iterator[MeterReading]:
-        for parsed_line in self.get_parsed_lines():
-            if parsed_line.reading:
-                yield parsed_line.reading
+    def get_values(self) -> Iterator[InterpretedValue]:
+        for point in self.get_interpreted_data():
+            if point.value:
+                yield point.value
 
-    def get_parsed_lines(self) -> Iterator[ParsedLine]:
+    def get_interpreted_data(self) -> Iterator[InterpretedPoint]:
         thousands = self.value_getter.get_first_thousand()
         lv = None  # Last Value
         lfv = None  # Last Full Value
         ldt = None  # Last Date Time
 
-        line: str = ''
-
-        def ignore(reason: str) -> ParsedLine:
-            self.warn(reason, line)
-            return ParsedLine.create_ignore(line, reason)
-
         for (row1, row2) in self.get_sorted_value_row_pairs():
             (dt, v, error, f, fn_data, modified_at) = row1
-            line = f'{f}: {f"{v:.3f}" if v is not None else error}'
+
+            def ignore(reason: str) -> InterpretedPoint:
+                self.warn(reason, row1.filename)
+                return InterpretedPoint.create_ignore(row1, reason)
+
             next_v = row2.reading if row2 else None
             ndt = row2.timestamp if row2 else None
 
@@ -593,7 +603,7 @@ class DataGatherer:
                 if nfv is not None and lfv <= nfv and not (lfv <= fv <= nfv):
                     if lps > 2 * (nfv - lfv) / (ndt - ldt).total_seconds():
                         yield ignore(
-                            f'Too big change (continuity): {lps:.2f} l/s '
+                            f'Too big change (continuity): {lps:.3f} l/s '
                             f'(from {lfv} to {fv} in '
                             f'{(dt - ldt).total_seconds()}s)')
                         continue
@@ -617,12 +627,11 @@ class DataGatherer:
                     yield ignore(
                         f'Conflicting reading for {dt} (prev={lv} cur={v})')
                 else:
-                    yield ParsedLine.create_ignore(line, 'Duplicate data')
+                    yield ignore('Duplicate data')
                 continue
 
             # Yield data
-            yield ParsedLine.create_reading(
-                line, f, fn_data, dt, fv, ddt, dfv, correction)
+            yield InterpretedPoint.create_value(row1, fv, ddt, dfv, correction)
 
             # Update last values
             lfv = fv
