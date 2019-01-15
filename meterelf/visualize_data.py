@@ -16,8 +16,11 @@ START_FROM = parse_datetime('2018-09-24T00:00:00+03:00')
 THOUSAND_WRAP_THRESHOLD = 700  # litres
 VALUE_MODULO = 1000
 VALUE_MAX_LEAP = 300  # litres (change per sample)
-VALUE_MAX_DIFF_PER_SECOND = 7.0  # litres per second
-VALUE_MAX_DIFF_PER_SECOND_JUMP = 2.0  # litres per second
+VALUE_MAX_DIFFS = {
+    'normal': 7.0,  # litres per second
+    'reverse': 2.0,  # litres per second
+    'snapshot': 0.01,  # litres per second
+}
 MAX_CORRECTION = 0.05  # litres
 
 MAX_SYNTHETIC_READINGS_TO_INSERT = 10
@@ -531,6 +534,7 @@ class DataGatherer:
             (dt, v, error, f, fn_data, modified_at) = row1
             line = f'{f}: {f"{v:.3f}" if v is not None else error}'
             next_v = row2.reading if row2 else None
+            ndt = row2.timestamp if row2 else None
 
             if v is None:
                 yield ignore('Unknown reading')
@@ -585,13 +589,25 @@ class DataGatherer:
 
             if dfv is not None and time_diff:
                 lps = dfv / time_diff
-                allowed_diff = (
-                    VALUE_MAX_DIFF_PER_SECOND if (
-                        nfv is not None and fv <= nfv) else
-                    VALUE_MAX_DIFF_PER_SECOND_JUMP)
-                if lps > allowed_diff:
+
+                if nfv is not None and lfv <= nfv and not (lfv <= fv <= nfv):
+                    if lps > 2 * (nfv - lfv) / (ndt - ldt).total_seconds():
+                        yield ignore(
+                            f'Too big change (continuity): {lps:.2f} l/s '
+                            f'(from {lfv} to {fv} in '
+                            f'{(dt - ldt).total_seconds()}s)')
+                        continue
+
+                is_lonely_snapshot = (fn_data.is_snapshot and time_diff >= 30)
+                next_value_goes_backward = (nfv is not None and nfv < fv)
+                diff_kind = (
+                    'snapshot' if is_lonely_snapshot else
+                    'reverse' if next_value_goes_backward else
+                    'normal')
+                if lps > VALUE_MAX_DIFFS[diff_kind]:
                     yield ignore(
-                        f'Too big change {lps:.1f} l/s (from {lfv} to {fv} '
+                        f'Too big change ({diff_kind}): {lps:.2f} l/s '
+                        f'(from {lfv} to {fv} '
                         f'in {(dt - ldt).total_seconds()}s)')
                     continue
 
