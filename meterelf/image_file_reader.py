@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 
+import argparse
 import os
 import sys
 import time
@@ -11,33 +12,45 @@ from . import _api as meterelf
 from ._iter_utils import process_in_blocks
 from .value_db import Entry, ValueDatabase
 
-PARAMS_FILE = os.getenv('METERELF_PARAMS_FILE')
-
 
 def main(argv: Sequence[str] = sys.argv) -> None:
-    db_filename = sys.argv[1]
-    reread_filenames = sys.argv[2:]
-    value_db = ValueDatabase(db_filename)
-    if reread_filenames:
-        recollect_data_of_images(value_db, reread_filenames)
+    args = parse_args(argv)
+    value_db = ValueDatabase(args.db_path)
+    params_file = os.path.abspath(args.params_file.name)
+    if args.reread_filenames:
+        recollect_data_of_images(
+            value_db, params_file, args.reread_filenames)
     else:
-        collect_data_of_new_images(value_db)
+        collect_data_of_new_images(value_db, params_file)
     value_db.commit()
+
+
+def parse_args(argv: Sequence[str]) -> argparse.Namespace:
+    parser = argparse.ArgumentParser()
+    parser.add_argument('db_path', type=str, default=None)
+    parser.add_argument('params_file', type=argparse.FileType('r'))
+    parser.add_argument('--reread-filenames', '-r', nargs='*', metavar='PATH')
+    args = parser.parse_args(argv[1:])
+    return args
 
 
 def recollect_data_of_images(
         value_db: ValueDatabase,
+        params_file: str,
         filenames: Iterable[str],
 ) -> None:
     dirname: Callable[[str], str] = os.path.dirname
     for (directory, files_in_dir) in groupby(filenames, dirname):
         images = [os.path.basename(x) for x in files_in_dir]
         processor = _NewImageProcessorForDir(
-            value_db, directory, do_replace=True)
+            value_db, params_file, directory, do_replace=True)
         process_in_blocks(images, processor.process_new_images)
 
 
-def collect_data_of_new_images(value_db: ValueDatabase) -> None:
+def collect_data_of_new_images(
+        value_db: ValueDatabase,
+        params_file: str,
+) -> None:
     for month_dir in sorted(glob('[12][0-9][0-9][0-9]-[01][0-9]')):
         print(f'Checking {month_dir}')
         if value_db.is_done_with_month(month_dir):
@@ -53,7 +66,8 @@ def collect_data_of_new_images(value_db: ValueDatabase) -> None:
                 os.path.basename(path)
                 for path in sorted(glob(os.path.join(day_path, '*')))
                 if path.endswith(IMAGE_EXTENSIONS)]
-            processor = _NewImageProcessorForDir(value_db, day_path)
+            processor = _NewImageProcessorForDir(
+                value_db, params_file, day_path)
             process_in_blocks(images, processor.process_new_images)
 
 
@@ -64,10 +78,12 @@ class _NewImageProcessorForDir:
     def __init__(
             self,
             value_db: ValueDatabase,
+            params_file: str,
             directory: str,
             do_replace: bool = False,
     ) -> None:
         self.value_db = value_db
+        self.params_file = params_file
         self.directory = directory
         self._day_dir = os.path.basename(directory)
         self._month_dir = os.path.basename(os.path.dirname(directory))
@@ -88,7 +104,7 @@ class _NewImageProcessorForDir:
                 yield os.path.join(self.directory, filename)
 
     def _read_data_and_enter_to_db(self, paths: Iterable[str]) -> None:
-        image_data = get_data_of_images(paths)
+        image_data = get_data_of_images(self.params_file, paths)
         entries = (
             Entry(
                 month_dir=self._month_dir,
@@ -102,14 +118,13 @@ class _NewImageProcessorForDir:
         self.value_db.commit()
 
 
-def get_data_of_images(paths: Iterable[str]) -> Dict[str, Tuple[str, str]]:
-    if not PARAMS_FILE:
-        raise EnvironmentError(
-            'METERELF_PARAMS_FILE environment variable must be set')
-
+def get_data_of_images(
+        params_file: str,
+        paths: Iterable[str],
+) -> Dict[str, Tuple[str, str]]:
     return dict(
         _format_image_data(data)
-        for data in meterelf.get_meter_values(PARAMS_FILE, paths)
+        for data in meterelf.get_meter_values(params_file, paths)
     )
 
 
