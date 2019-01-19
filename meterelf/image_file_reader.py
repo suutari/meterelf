@@ -26,7 +26,7 @@ def main(argv: Sequence[str] = sys.argv) -> None:
 
 
 def recollect_data_of_images(
-        value_db: 'ValueDatabase',
+        value_db: ValueDatabase,
         filenames: Iterable[str],
 ) -> None:
     dirname: Callable[[str], str] = os.path.dirname
@@ -37,7 +37,7 @@ def recollect_data_of_images(
         process_in_blocks(images, processor.process_new_images)
 
 
-def collect_data_of_new_images(value_db: 'ValueDatabase') -> None:
+def collect_data_of_new_images(value_db: ValueDatabase) -> None:
     for month_dir in sorted(glob('[12][0-9][0-9][0-9]-[01][0-9]')):
         print(f'Checking {month_dir}')
         if value_db.is_done_with_month(month_dir):
@@ -63,7 +63,7 @@ IMAGE_EXTENSIONS = ('.jpg', '.ppm')
 class _NewImageProcessorForDir:
     def __init__(
             self,
-            value_db: 'ValueDatabase',
+            value_db: ValueDatabase,
             directory: str,
             do_replace: bool = False,
     ) -> None:

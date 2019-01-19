@@ -17,7 +17,7 @@ def main(argv: Sequence[str] = sys.argv) -> None:
     value_db.commit()
 
 
-def get_entries_from_value_files(value_db: 'ValueDatabase') -> Iterator[Entry]:
+def get_entries_from_value_files(value_db: ValueDatabase) -> Iterator[Entry]:
     month_dirs = sorted(glob('[12][0-9][0-9][0-9]-[01][0-9]'))
     for month_dir in month_dirs:
         if value_db.is_done_with_month(month_dir):
