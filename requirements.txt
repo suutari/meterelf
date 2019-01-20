@@ -7,6 +7,6 @@ numpy==1.16.0             # via opencv-python
 opencv-python==3.4.5.20   # via meterelf
 python-dateutil==2.7.5    # via meterelf
 pytz==2018.9              # via meterelf
-pyyaml==3.13              # via meterelf
+pyyaml==4.2b4
 six==1.12.0               # via python-dateutil
 typing-extensions==3.7.2  # via meterelf
