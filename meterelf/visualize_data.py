@@ -124,6 +124,7 @@ def main(argv: Sequence[str] = sys.argv) -> None:
             visualize(
                 value_getter=value_getter,
                 resolution=args.resolution,
+                amend_values=args.amend_values,
                 warn=(print_warning if args.verbose else ignore_warning))
 
 
@@ -148,6 +149,7 @@ def parse_args(argv: Sequence[str]) -> argparse.Namespace:
     parser.add_argument('--show-influx-data', '-I', action='store_true')
     parser.add_argument('--start-from', '-s', default=START_FROM,
                         type=parse_datetime)
+    parser.add_argument('--amend-values', '-a', action='store_true')
     parser.add_argument('--resolution', '-r', default='day', choices=[
         'second', 'three-seconds', 'five-seconds', 'minute', 'hour',
         'day', 'week', 'month',
@@ -257,9 +259,10 @@ def ignore_warning(text: str) -> None:
 def visualize(
         value_getter: ValueGetter,
         resolution: str,
+        amend_values: bool = False,
         warn: Callable[[str], None] = ignore_warning,
 ) -> None:
-    data = DataGatherer(value_getter, resolution, warn)
+    data = DataGatherer(value_getter, resolution, amend_values,  warn)
     for line in data.get_visualization():
         print(line)
 
@@ -269,11 +272,13 @@ class DataGatherer:
             self,
             value_getter: ValueGetter,
             resolution: str = 'day',
+            amend_values: bool = False,
             warn: Optional[Callable[[str], None]] = None,
     ) -> None:
         self.value_getter = value_getter
         self._warn_func: Callable[[str], None] = warn or print_warning
         self.resolution: str = resolution
+        self.amend_values: bool = amend_values
 
     def warn(self, message: str, filename: str = '') -> None:
         self._warn_func(f'{message}{f", in {filename}" if filename else ""}')
@@ -449,7 +454,9 @@ class DataGatherer:
     def _get_grouped_data(self) -> Iterator[GroupedData]:
         last_group = None
         entry = None
-        for value in self._get_amended_values():
+        get_values = (self._get_amended_values if self.amend_values
+                      else self.get_values)
+        for value in get_values():
             group = self.get_group(value.t)
             if last_group is None or group != last_group:
                 last_group = group
