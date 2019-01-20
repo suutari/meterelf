@@ -1,0 +1,8 @@
+#!/bin/sh
+set -e
+python setup.py check --metadata --strict
+rm -fr tmp-dist
+python setup.py sdist --dist-dir tmp-dist
+python setup.py bdist_wheel --dist-dir tmp-dist
+twine check tmp-dist/*
+rm -fr tmp-dist
