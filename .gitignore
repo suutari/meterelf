@@ -1,5 +1,7 @@
 /build
 /dist
+/.eggs
+
 /requirements-local.*
 
 .cache
