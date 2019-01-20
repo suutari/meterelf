@@ -1,5 +1,6 @@
 branches: {only: [master, test]}
 
+dist: xenial
 sudo: false
 language: python
 cache: pip
@@ -7,7 +8,7 @@ cache: pip
 matrix:
   include:
     - python: "3.6"
-    - python: "3.7-dev"
+    - python: "3.7"
     - {python: "3.6", env: TOXENV=packaging}
     - {python: "3.6", env: TOXENV=requirements}
     - {python: "3.6", env: TOXENV=style}

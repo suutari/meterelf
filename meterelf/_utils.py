@@ -16,7 +16,7 @@ def float_point_to_int(point: FloatPoint) -> Point:
 
 
 def get_angle_by_vector(vector: FloatPoint) -> Optional[float]:
-    """
+    r"""
     Get angle of a vector as a float from 0.0 to 1.0.
 
         0.875    0    0.125
