@@ -4,9 +4,11 @@ import argparse
 import os
 import sys
 import time
+from datetime import date, timedelta
 from glob import glob
 from itertools import groupby
-from typing import Callable, Dict, Iterable, Iterator, Sequence, Tuple
+from typing import (
+    Callable, Dict, Iterable, Iterator, Optional, Sequence, Tuple)
 
 from . import _api as meterelf
 from ._iter_utils import process_in_blocks
@@ -21,7 +23,7 @@ def main(argv: Sequence[str] = sys.argv) -> None:
         recollect_data_of_images(
             value_db, params_file, args.reread_filenames)
     else:
-        collect_data_of_new_images(value_db, params_file)
+        collect_data_of_new_images(value_db, params_file, args.days)
     value_db.commit()
 
 
@@ -29,6 +31,7 @@ def parse_args(argv: Sequence[str]) -> argparse.Namespace:
     parser = argparse.ArgumentParser()
     parser.add_argument('db_path', type=str, default=None)
     parser.add_argument('params_file', type=argparse.FileType('r'))
+    parser.add_argument('--days', '-d', type=int, nargs='?')
     parser.add_argument('--reread-filenames', '-r', nargs='*', metavar='PATH')
     args = parser.parse_args(argv[1:])
     return args
@@ -50,14 +53,27 @@ def recollect_data_of_images(
 def collect_data_of_new_images(
         value_db: ValueDatabase,
         params_file: str,
+        only_last_days: Optional[int] = None,
 ) -> None:
+    start_date: date = (
+        date.today() - timedelta(days=only_last_days)
+        if only_last_days is not None else date(1900, 1, 1))
+
     for month_dir in sorted(glob('[12][0-9][0-9][0-9]-[01][0-9]')):
+        (year, month) = [int(x) for x in month_dir.split('-')]
+        if date(year, month, 1) < date(start_date.year, start_date.month, 1):
+            continue
+
         print(f'Checking {month_dir}')
         if value_db.is_done_with_month(month_dir):
             continue
 
         for day_path in sorted(glob(os.path.join(month_dir, '[0-3][0-9]'))):
             day_dir = os.path.basename(day_path)
+            day = int(day_dir)
+            if date(year, month, day) < start_date:
+                continue
+
             print(f'Checking {day_path}')
             if value_db.is_done_with_day(month_dir, day_dir):
                 continue
