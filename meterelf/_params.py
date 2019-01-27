@@ -1,5 +1,5 @@
 import os
-from typing import Dict, List, Optional, Type, TypeVar
+from typing import Any, Dict, List, Optional, Type, TypeVar
 
 import yaml
 
@@ -27,7 +27,7 @@ class Params:
             raise LoadError('Not a valid parameters file: {}'.format(filename))
         return cls(os.path.dirname(filename), data)
 
-    def __init__(self, base_dir: str, data: Dict) -> None:
+    def __init__(self, base_dir: str, data: Dict[Any, Any]) -> None:
         d = TypeCheckedGetter(data, base_dir=base_dir)
         self.image_glob: str = d.glob('image_glob')
 
@@ -69,7 +69,7 @@ def load(filename: str) -> Params:
 
 
 class _Needle:
-    def __init__(self, data: Dict) -> None:
+    def __init__(self, data: Dict[Any, Any]) -> None:
         d = TypeCheckedGetter(data)
         self.name = d.text('name')
         self.color_range = d.hls_color('color_range')
@@ -82,7 +82,12 @@ class _Needle:
 
 
 class TypeCheckedGetter:
-    def __init__(self, data: Dict, *, base_dir: Optional[str] = None) -> None:
+    def __init__(
+            self,
+            data: Dict[Any, Any],
+            *,
+            base_dir: Optional[str] = None,
+    ) -> None:
         self.data = data
         self.base_dir = base_dir
 
