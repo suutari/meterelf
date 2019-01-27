@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 import argparse
+import multiprocessing
 import os
 import sys
 import time
@@ -197,10 +198,9 @@ def get_data_of_images(
 ) -> Dict[str, Tuple[str, str]]:
     if not paths:
         return {}
-    return dict(
-        _format_image_data(meter_value_getter.get_data(path))
-        for path in paths
-    )
+    with multiprocessing.Pool() as pool:
+        entries = pool.imap_unordered(meter_value_getter.get_data, paths)
+        return dict(_format_image_data(x) for x in entries)
 
 
 def _format_image_data(
