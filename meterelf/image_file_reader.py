@@ -43,14 +43,15 @@ class DataCollector:
 
     def __init__(self, value_db: ValueDatabase, params_file: str) -> None:
         self.value_db = value_db
-        self.params_file = params_file
+        self.meter_value_getter = meterelf.MeterValueGetter(params_file)
 
     def recollect_data_of_images(self, filenames: Iterable[str]) -> None:
         dirname: Callable[[str], str] = os.path.dirname
         for (directory, files_in_dir) in groupby(filenames, dirname):
             images = [os.path.basename(x) for x in files_in_dir]
             processor = _NewImageProcessorForDir(
-                self.value_db, self.params_file, directory, do_replace=True)
+                self.value_db, self.meter_value_getter, directory,
+                do_replace=True)
             process_in_blocks(images, processor.process_new_images)
 
     def collect_data_of_new_images(
@@ -88,7 +89,8 @@ class DataCollector:
                     for path in sorted(glob(os.path.join(day_path, '*')))
                     if path.endswith(self.image_extensions)]
                 processor = _NewImageProcessorForDir(
-                    self.value_db, self.params_file, day_path, timer=timer)
+                    self.value_db, self.meter_value_getter, day_path,
+                    timer=timer)
                 process_in_blocks(images, processor.process_new_images)
                 images_processed += processor.processed_count
         print()
@@ -142,13 +144,13 @@ class _NewImageProcessorForDir:
     def __init__(
             self,
             value_db: ValueDatabase,
-            params_file: str,
+            meter_value_getter: meterelf.MeterValueGetter,
             directory: str,
             do_replace: bool = False,
             timer: Optional[Timer] = None,
     ) -> None:
         self.value_db = value_db
-        self.params_file = params_file
+        self.meter_value_getter = meter_value_getter
         self.directory = directory
         self._day_dir = os.path.basename(directory)
         self._month_dir = os.path.basename(os.path.dirname(directory))
@@ -173,7 +175,7 @@ class _NewImageProcessorForDir:
 
     def _read_data_and_enter_to_db(self, paths: Iterable[str]) -> None:
         with self.timer.time_action('analyzing images'):
-            image_data = get_data_of_images(self.params_file, paths)
+            image_data = get_data_of_images(self.meter_value_getter, paths)
         entries = (
             Entry(
                 month_dir=self._month_dir,
@@ -190,14 +192,14 @@ class _NewImageProcessorForDir:
 
 
 def get_data_of_images(
-        params_file: str,
+        meter_value_getter: meterelf.MeterValueGetter,
         paths: Iterable[str],
 ) -> Dict[str, Tuple[str, str]]:
     if not paths:
         return {}
     return dict(
-        _format_image_data(data)
-        for data in meterelf.get_meter_values(params_file, paths)
+        _format_image_data(meter_value_getter.get_data(path))
+        for path in paths
     )
 
 
