@@ -32,8 +32,6 @@ DateTimeConverter = Callable[[datetime], datetime]
 
 EUR_PER_LITRE = ((1.43 + 2.38) * 1.24) / 1000.0
 
-ZEROS_PER_CUMULATING = 3
-
 
 ValueRowPair = Tuple[ValueRow, Optional[ValueRow]]
 
@@ -99,8 +97,10 @@ class GroupedData:
     min_fv: float
     max_fv: float
     sum: float
+    sum_t: timedelta
     synthetic_count: int
     source_points: int
+    max_event_num: Optional[int]
 
 
 @dataclass
@@ -290,6 +290,7 @@ class DataGatherer:
     @resolution.setter
     def resolution(self, resolution: str) -> None:
         self._resolution = resolution
+        self.zeros_per_cumulating = 1
         self._truncate_timestamp: DateTimeConverter = self._truncate_by_step
         if resolution == 'month':
             self._truncate_timestamp = self._truncate_by_month
@@ -319,10 +320,12 @@ class DataGatherer:
             self._litres_per_bar = 0.1
             self._step = timedelta(seconds=5)
         elif resolution == 'three-seconds':
+            self.zeros_per_cumulating = 2
             self._dt_format = '%Y-%m-%d %a %H:%M:%S'
             self._litres_per_bar = 0.05
             self._step = timedelta(seconds=3)
         elif resolution == 'second':
+            self.zeros_per_cumulating = 3
             self._dt_format = '%Y-%m-%d %a %H:%M:%S'
             self._litres_per_bar = 0.02
             self._step = timedelta(seconds=1)
@@ -374,14 +377,27 @@ class DataGatherer:
                 continue
             cum_txt = '{:9.3f}l'.format(entry.cum) if entry.cum else ''
             time_range = entry.max_t - entry.min_t
+            drops = entry.sum * 1000.0 * 20.0
+            secs = entry.sum_t.total_seconds()
+            secs_per_drop = secs / drops if drops else None
             extra = ''
-            if time_range > timedelta(hours=1):
+
+            if not drops or secs_per_drop is None:
+                extra = f' {""                   :7}     '
+            elif time_range > timedelta(hours=1):
                 secs = time_range.total_seconds()
                 per_sec = (entry.max_fv - entry.min_fv) / secs
                 per_year = per_sec * SECONDS_PER_YEAR
-                extra = f' = {per_year / 1000.0 :3.0f}m3/y'
+                extra = f' {per_year / 1000.0 :7.1f}kl/y '
             else:
-                extra = f' = {entry.sum * 1000.0 * 20.0 :8.0f}drops'
+                l_per_min = 60.0 * entry.sum / secs
+                extra = f' {l_per_min         :7.4f}l/min'
+
+            if secs_per_drop and secs_per_drop >= 0.05:
+                extra += f' ~{secs_per_drop:5.1f}s/drop'
+            else:
+                extra += f'  {""              :5}      '
+
             eurs = entry.sum * EUR_PER_LITRE
             if eurs < 0.1:
                 price_txt = f'    {eurs*100.0:5.2f}c'
@@ -389,7 +405,7 @@ class DataGatherer:
                 price_txt = f'{eurs:6.2f}e   '
             yield (
                 '{t0:%Y-%m-%d %a %H:%M:%S}--{t1:%Y-%m-%d %H:%M:%S} '
-                '{v0:10.3f}--{v1:10.3f} ds: {sp:6d}{syn:6} {zpp:>4} '
+                '{v0:10.3f}--{v1:10.3f} ds: {sp:6d}{syn:6} {evnt:>5} '
                 '{spp:8.3f} {c:10} {s:9.3f}l{extra} {price} {b}').format(
                     t0=entry.min_t,
                     t1=entry.max_t,
@@ -399,7 +415,8 @@ class DataGatherer:
                         '-{}'.format(entry.synthetic_count)
                         if entry.synthetic_count else ''),
                     sp=entry.source_points,
-                    zpp='#{:d}'.format(entry.zpp),
+                    evnt='#{}'.format(
+                        entry.max_event_num) if entry.max_event_num else '',
                     spp=entry.spp,
                     c=cum_txt,
                     s=entry.sum,
@@ -410,46 +427,54 @@ class DataGatherer:
     def get_grouped_data_and_gap_lengths(
             self
     ) -> Iterator[Union[CumulativeGroupedData, timedelta]]:
-        last_entry = None
-        for entry in self.get_grouped_data():
-            if last_entry:
-                last_end = last_entry.max_t
-                this_start = entry.min_t
-                if self._has_time_steps_between(last_end, this_start):
-                    yield this_start - last_end
-            yield entry
-            last_entry = entry
-
-    def get_grouped_data(self) -> Iterator[CumulativeGroupedData]:
         last_period = None
         sum_per_period = 0.0
         zeroings_per_period = 1
         cumulative_since_0 = 0.0
         zeros_in_row = 0
-        for entry in self._get_grouped_data():
-            sum_per_period += entry.sum
-            cumulative_since_0 += entry.sum
-            if entry.sum == 0.0:
+        for (entry, gap) in self._get_grouped_data_and_gap_lengths():
+            is_big_gap = (gap and gap >= timedelta(seconds=30))
+            if entry:
+                sum_per_period += entry.sum
+                cumulative_since_0 += entry.sum
+            if is_big_gap or (entry and entry.sum == 0.0):
                 zeros_in_row += 1
-                if zeros_in_row >= ZEROS_PER_CUMULATING:
+                if is_big_gap or zeros_in_row >= self.zeros_per_cumulating:
                     cumulative_since_0 = 0.0
-                    if zeros_in_row == ZEROS_PER_CUMULATING:
+                    if zeros_in_row == self.zeros_per_cumulating:
                         zeroings_per_period += 1
             else:
                 zeros_in_row = 0
 
-            period = entry.min_t.strftime('%Y-%m-%d')
-            if period != last_period:
-                sum_per_period = 0.0
-                zeroings_per_period = 1
-                last_period = period
+            if gap:
+                yield gap
+                continue
+            elif entry:
+                period = entry.min_t.strftime('%Y-%m-%d')
+                if period != last_period:
+                    sum_per_period = 0.0
+                    zeroings_per_period = 1
+                    last_period = period
 
-            yield CumulativeGroupedData(
-                cum=cumulative_since_0,
-                spp=sum_per_period,
-                zpp=zeroings_per_period,
-                **entry.__dict__,
-            )
+                yield CumulativeGroupedData(
+                    cum=cumulative_since_0,
+                    spp=sum_per_period,
+                    zpp=zeroings_per_period,
+                    **entry.__dict__,
+                )
+
+    def _get_grouped_data_and_gap_lengths(
+            self
+    ) -> Iterator[Tuple[Optional[GroupedData], Optional[timedelta]]]:
+        last_entry = None
+        for entry in self._get_grouped_data():
+            if last_entry:
+                last_end = last_entry.max_t
+                this_start = entry.min_t
+                if self._has_time_steps_between(last_end, this_start):
+                    yield (None, this_start - last_end)
+            yield (entry, None)
+            last_entry = entry
 
     def _get_grouped_data(self) -> Iterator[GroupedData]:
         last_group = None
@@ -469,8 +494,10 @@ class DataGatherer:
                     min_fv=value.fv,
                     max_fv=value.fv,
                     sum=(value.dfv or 0.0),
+                    sum_t=(value.dt or timedelta(0)),
                     synthetic_count=(1 if value.synthetic else 0),
                     source_points=1,
+                    max_event_num=value.filename_data.event_number,
                 )
             else:
                 entry.min_t = min(value.t, entry.min_t)
@@ -478,8 +505,12 @@ class DataGatherer:
                 entry.min_fv = min(value.fv, entry.min_fv)
                 entry.max_fv = max(value.fv, entry.max_fv)
                 entry.sum += (value.dfv or 0.0)
+                entry.sum_t += (value.dt or timedelta(0))
                 entry.synthetic_count += (1 if value.synthetic else 0)
                 entry.source_points += 1
+                entry.max_event_num = max(
+                    value.filename_data.event_number or 0,
+                    entry.max_event_num or 0) or None
         if entry:
             yield entry
 
