@@ -13,7 +13,9 @@ from typing import (
     Callable, Dict, Iterable, Iterator, Optional, Sequence, Tuple)
 
 from . import _api as meterelf
+from ._fnparse import timestamp_from_filename
 from ._iter_utils import process_in_blocks
+from ._timestamps import DEFAULT_TZ, time_ns
 from .value_db import Entry, ValueDatabase
 
 
@@ -179,13 +181,12 @@ class _NewImageProcessorForDir:
             image_data = get_data_of_images(self.meter_value_getter, paths)
         entries = (
             Entry(
-                month_dir=self._month_dir,
-                day_dir=self._day_dir,
-                filename=os.path.basename(path),
+                timestamp=timestamp_from_filename(filename, DEFAULT_TZ),
+                filename=filename,
                 reading=file_data[0],
                 error=file_data[1],
-                modified_at=time.time())
-            for (path, file_data) in image_data.items())
+                modified_at=time_ns())
+            for (filename, file_data) in image_data.items())
         with self.timer.time_action('storing entries to database'):
             self.value_db.insert_entries(entries)
             self.value_db.commit()
@@ -209,7 +210,7 @@ def _format_image_data(
     value_str = f'{data.value:07.3f}' if data.value else ''
     error_str = f'{data.error}' if data.error else ''
     print(f'{data.filename}:\t{value_str}{error_str}')
-    return (data.filename, (value_str, error_str))
+    return (os.path.basename(data.filename), (value_str, error_str))
 
 
 if __name__ == '__main__':

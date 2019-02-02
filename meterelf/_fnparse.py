@@ -5,6 +5,8 @@ from typing import NamedTuple, Optional
 from dateutil.parser import parse as parse_datetime
 from typing_extensions import Protocol
 
+from ._timestamps import timestamp_from_datetime
+
 
 class TzInfo(Protocol):
     def localize(self, dt: datetime, is_dst: bool = False) -> datetime:
@@ -16,6 +18,10 @@ class FilenameData(NamedTuple):
     event_number: Optional[int]
     is_snapshot: bool
     extension: str
+
+
+def timestamp_from_filename(filename: str, tz: TzInfo) -> int:
+    return timestamp_from_datetime(parse_filename(filename, tz).timestamp)
 
 
 def parse_filename(filename: str, tz: TzInfo) -> FilenameData:

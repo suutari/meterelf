@@ -2,10 +2,11 @@
 
 import os
 import sys
-import time
 from glob import glob
 from typing import Iterator, Sequence, Tuple
 
+from ._fnparse import parse_filename
+from ._timestamps import DEFAULT_TZ, time_ns, timestamp_from_datetime
 from .value_db import Entry, ValueDatabase
 
 
@@ -30,8 +31,9 @@ def get_entries_from_value_files(value_db: ValueDatabase) -> Iterator[Entry]:
             if not value_db.is_done_with_day(month_dir, day_dir):
                 print(f'Doing {val_fn}')
                 for (filename, value, error) in parse_value_file(val_fn):
-                    yield Entry(month_dir, day_dir, filename,
-                                value, error, time.time())
+                    fn_data = parse_filename(filename, DEFAULT_TZ)
+                    timestamp = timestamp_from_datetime(fn_data.timestamp)
+                    yield Entry(timestamp, filename, value, error, time_ns())
 
 
 def parse_value_file(fn: str) -> Iterator[Tuple[str, str, str]]:

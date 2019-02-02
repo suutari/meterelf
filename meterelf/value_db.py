@@ -1,23 +1,19 @@
 import sqlite3
-from datetime import date, datetime, timedelta, tzinfo
+from datetime import date, datetime, timedelta
 from typing import (
     Any, Iterable, Iterator, NamedTuple, Optional, Sequence, Tuple, cast)
 
-import pytz
-
-from ._fnparse import FilenameData, parse_filename
+from ._fnparse import FilenameData, parse_filename, timestamp_from_filename
 from ._iter_utils import process_in_blocks
-
-DEFAULT_TZ = pytz.timezone('Europe/Helsinki')
+from ._timestamps import DEFAULT_TZ, datetime_from_timestamp
 
 
 class Entry(NamedTuple):
-    month_dir: str
-    day_dir: str
+    timestamp: int
     filename: str
     reading: str
     error: str
-    modified_at: float
+    modified_at: int
 
 
 class ValueRow(NamedTuple):
@@ -47,26 +43,68 @@ class ValueDatabase:
         self._migrate()
 
     def _migrate(self) -> None:
-        self.db.execute(
+        create_watermeter_image_table_sql = (
             'CREATE TABLE IF NOT EXISTS watermeter_image ('
-            ' month_dir VARCHAR(7),'
-            ' day_dir VARCHAR(2),'
+            ' timestamp INTEGER,'  # unixtime * 10^9, i.e. ns precision
             ' filename VARCHAR(100),'
             ' reading DECIMAL(10,3),'
             ' error VARCHAR(1000),'
-            ' modified_at REAL'
+            ' modified_at INTEGER'  # unixtime * 10^9, i.e. ns precision
             ')')
-        self.db.execute(
+        self.db.execute(create_watermeter_image_table_sql)
+
+        create_filename_idx_sql = (
             'CREATE UNIQUE INDEX IF NOT EXISTS filename_idx'
             ' ON watermeter_image(filename)')
+        self.db.execute(create_filename_idx_sql)
+
+        # Drop deprecated month_day_fn_idx if it exists
         self.db.execute(
-            'CREATE UNIQUE INDEX IF NOT EXISTS month_day_fn_idx'
-            ' ON watermeter_image(month_dir, day_dir, filename)')
+            'DROP INDEX IF EXISTS month_day_fn_idx')
+
+        # Convert old main table schema to new format if not yet done
+        current_create_db_sql = list(cast(Iterator[Row], self.db.execute(
+            'SELECT sql FROM sqlite_master WHERE name=?',
+            ('watermeter_image',))))[0][0]
+        column_defs = ['month_dir VARCHAR', 'day_dir VARCHAR']
+        if all(x in current_create_db_sql for x in column_defs):
+            self.db.execute(
+                'ALTER TABLE watermeter_image RENAME TO watermeter_image_old')
+            self.db.execute(create_watermeter_image_table_sql)
+
+            self._migrate_old_main_table_data_to_new_format()
+            self.commit()
+
+            self.db.execute('DROP INDEX IF EXISTS filename_idx')
+            self.db.execute(create_filename_idx_sql)
+
+            self.db.execute('DROP TABLE IF EXISTS watermeter_image_old')
+
         self.db.execute(
             'CREATE TABLE IF NOT EXISTS watermeter_thousands ('
             ' iso_date VARCHAR(10),'
             ' value INTEGER'
             ')')
+
+    def _migrate_old_main_table_data_to_new_format(self) -> None:
+        print('Migrating data')
+        entries = self._get_old_data_converted_to_new_format()
+        self.insert_entries(entries)
+        print('\nDone.')
+
+    def _get_old_data_converted_to_new_format(self) -> Iterator[Entry]:
+        entry_count = cast(int, list(self.db.execute(
+            'SELECT COUNT(*) FROM watermeter_image_old'))[0][0])
+        cursor = cast(Iterator[Row], self.db.execute(
+            'SELECT filename, reading, error, modified_at'
+            ' FROM watermeter_image_old ORDER BY filename'))
+        for (n, row) in enumerate(cursor):
+            (filename, reading, error, modified_at) = row
+            if n % 10000 == 0:
+                print(f'{n//10000:9d}/{entry_count//10000:9d}\r', end='')
+            yield Entry(
+                timestamp_from_filename(filename, DEFAULT_TZ),
+                filename, reading, error, int(modified_at * 1_000_000_000))
 
     def commit(self) -> None:
         self.db.commit()
@@ -82,7 +120,7 @@ class ValueDatabase:
 
     def get_values_from_date(self, value: date) -> Iterator[ValueRow]:
         cursor = cast(Iterator[Row], self.db.execute(
-            'SELECT month_dir, day_dir, filename, reading, error, modified_at'
+            'SELECT timestamp, filename, reading, error, modified_at'
             ' FROM watermeter_image'
             ' WHERE filename >= ?'
             ' ORDER BY filename',
@@ -117,12 +155,10 @@ class ValueDatabase:
         process_in_blocks(entries, self._insert_entries)
 
     def _insert_entries(self, entries: Sequence[Entry]) -> None:
-        print(f'Inserting {len(entries)} entries to database')
         self.db.executemany(
             'INSERT OR REPLACE INTO watermeter_image'
-            ' (month_dir, day_dir, filename, reading, error,'
-            ' modified_at) VALUES'
-            ' (?, ?, ?, ?, ?, ?)', entries)
+            ' (timestamp, filename, reading, error, modified_at) VALUES'
+            ' (?, ?, ?, ?, ?)', entries)
 
     def is_done_with_month(self, month_dir: str) -> bool:
         last_day = get_last_day_of_month(month_dir)
@@ -145,22 +181,13 @@ class ValueDatabase:
 def entry_to_value_row(entry: Entry) -> ValueRow:
     filename_data = parse_filename(entry.filename, DEFAULT_TZ)
     return ValueRow(
-        timestamp=filename_data.timestamp,
+        timestamp=datetime_from_timestamp(entry.timestamp),
         reading=float(entry.reading) if entry.reading else None,
         error=entry.error,
         filename=entry.filename,
         data=filename_data,
         modified_at=datetime_from_timestamp(entry.modified_at),
     )
-
-
-def datetime_from_timestamp(
-        timestamp: float,
-        tz: tzinfo = DEFAULT_TZ,
-) -> datetime:
-    naive_dt = datetime.utcfromtimestamp(timestamp)
-    utc_dt = naive_dt.replace(tzinfo=pytz.UTC)
-    return utc_dt.astimezone(tz)
 
 
 def get_last_day_of_month(month_str: str) -> int:
