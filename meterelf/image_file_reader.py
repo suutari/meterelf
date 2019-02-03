@@ -186,7 +186,7 @@ class _NewImageProcessorForDir:
                 reading=file_data[0],
                 error=file_data[1],
                 modified_at=time_ns())
-            for (filename, file_data) in image_data.items())
+            for (filename, file_data) in sorted(image_data.items()))
         with self.timer.time_action('storing entries to database'):
             self.value_db.insert_entries(entries)
             self.value_db.commit()
