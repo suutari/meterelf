@@ -78,7 +78,7 @@ class InterpretedPoint:
             value_row=value_row,
             ignore=None,
             value=InterpretedValue(
-                t=value_row.timestamp,
+                t=value_row.time,
                 fv=fv,
                 dt=dt,
                 dfv=dfv,
@@ -582,7 +582,7 @@ class DataGatherer:
                 return InterpretedPoint.create_ignore(row1, reason)
 
             next_v = row2.reading if row2 else None
-            ndt = row2.timestamp if row2 else None
+            ndt = row2.time if row2 else None
 
             if v is None:
                 yield ignore('Unknown reading')

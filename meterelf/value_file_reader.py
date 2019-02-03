@@ -7,28 +7,28 @@ from typing import Iterator, Sequence, Tuple
 
 from ._fnparse import parse_filename
 from ._timestamps import DEFAULT_TZ, time_ns, timestamp_from_datetime
-from .value_db import Entry, ValueDatabase
+from .raw_db import Entry, RawDatabase
 
 
 def main(argv: Sequence[str] = sys.argv) -> None:
     db_filename = sys.argv[1]
-    value_db = ValueDatabase(db_filename)
-    entries = get_entries_from_value_files(value_db)
-    value_db.insert_or_update_entries(entries)
-    value_db.commit()
+    db = RawDatabase(db_filename)
+    entries = get_entries_from_value_files(db)
+    db.insert_or_update_entries(entries)
+    db.commit()
 
 
-def get_entries_from_value_files(value_db: ValueDatabase) -> Iterator[Entry]:
+def get_entries_from_value_files(db: RawDatabase) -> Iterator[Entry]:
     month_dirs = sorted(glob('[12][0-9][0-9][0-9]-[01][0-9]'))
     for month_dir in month_dirs:
-        if value_db.is_done_with_month(month_dir):
+        if db.is_done_with_month(month_dir):
             continue
 
         value_files = sorted(glob(os.path.join(month_dir, 'values-*.txt')))
         for val_fn in value_files:
             val_fn_bn = os.path.basename(val_fn)
             day_dir = val_fn_bn.replace('values-', '').split('.', 1)[0]
-            if not value_db.is_done_with_day(month_dir, day_dir):
+            if not db.is_done_with_day(month_dir, day_dir):
                 print(f'Doing {val_fn}')
                 for (filename, value, error) in parse_value_file(val_fn):
                     fn_data = parse_filename(filename, DEFAULT_TZ)
