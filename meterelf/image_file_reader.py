@@ -73,7 +73,7 @@ class DataCollector:
                 continue
 
             print(f'Checking {month_dir}')
-            if self.db.is_done_with_month(month_dir):
+            if self.db.is_done_with_month(year, month):
                 continue
 
             day_paths = glob(os.path.join(month_dir, '[0-3][0-9]'))
@@ -84,7 +84,7 @@ class DataCollector:
                     continue
 
                 print(f'Checking {day_path}')
-                if self.db.is_done_with_day(month_dir, day_dir):
+                if self.db.is_done_with_day(year, month, day):
                     continue
 
                 images = [

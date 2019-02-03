@@ -21,14 +21,15 @@ def main(argv: Sequence[str] = sys.argv) -> None:
 def get_entries_from_value_files(db: RawDatabase) -> Iterator[Entry]:
     month_dirs = sorted(glob('[12][0-9][0-9][0-9]-[01][0-9]'))
     for month_dir in month_dirs:
-        if db.is_done_with_month(month_dir):
+        (year, month) = [int(x) for x in month_dir.split('-')]
+        if db.is_done_with_month(year, month):
             continue
 
         value_files = sorted(glob(os.path.join(month_dir, 'values-*.txt')))
         for val_fn in value_files:
             val_fn_bn = os.path.basename(val_fn)
-            day_dir = val_fn_bn.replace('values-', '').split('.', 1)[0]
-            if not db.is_done_with_day(month_dir, day_dir):
+            day = int(val_fn_bn.replace('values-', '').split('.', 1)[0])
+            if not db.is_done_with_day(year, month, day):
                 print(f'Doing {val_fn}')
                 for (filename, value, error) in parse_value_file(val_fn):
                     fn_data = parse_filename(filename, DEFAULT_TZ)
