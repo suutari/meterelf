@@ -9,7 +9,7 @@ from ._timestamps import DEFAULT_TZ, datetime_from_timestamp
 
 
 class Entry(NamedTuple):
-    timestamp: int
+    time: int
     filename: str
     reading: str
     error: str
@@ -45,7 +45,7 @@ class ValueDatabase:
     def _migrate(self) -> None:
         create_watermeter_image_table_sql = (
             'CREATE TABLE IF NOT EXISTS watermeter_image ('
-            ' timestamp INTEGER,'  # unixtime * 10^9, i.e. ns precision
+            ' time INTEGER,'  # unixtime * 10^9, i.e. ns precision
             ' filename VARCHAR(100),'
             ' reading DECIMAL(10,3),'
             ' error VARCHAR(1000),'
@@ -58,11 +58,46 @@ class ValueDatabase:
             ' ON watermeter_image(filename)')
         self.db.execute(create_filename_idx_sql)
 
+        current_create_db_sql = list(cast(Iterator[Row], self.db.execute(
+            'SELECT sql FROM sqlite_master WHERE name=?',
+            ('watermeter_image',))))[0][0]
+        column_defs = ['timestamp INTEGER']
+        if all(x in current_create_db_sql for x in column_defs):
+            self.db.execute(
+                'ALTER TABLE watermeter_image RENAME TO watermeter_image_old')
+            self.db.execute(create_watermeter_image_table_sql)
+
+            self._migrate_old_main_table_data_to_new_format()
+            self.commit()
+
+            self.db.execute('DROP INDEX IF EXISTS filename_idx')
+            self.db.execute(create_filename_idx_sql)
+
+            self.db.execute('DROP TABLE IF EXISTS watermeter_image_old')
+
         self.db.execute(
             'CREATE TABLE IF NOT EXISTS watermeter_thousands ('
             ' iso_date VARCHAR(10),'
             ' value INTEGER'
             ')')
+
+    def _migrate_old_main_table_data_to_new_format(self) -> None:
+        print('Migrating data')
+        entries = self._get_old_data_converted_to_new_format()
+        self.insert_entries(entries)
+        print('\nDone.')
+
+    def _get_old_data_converted_to_new_format(self) -> Iterator[Entry]:
+        entry_count = cast(int, list(self.db.execute(
+            'SELECT COUNT(*) FROM watermeter_image_old'))[0][0])
+        cursor = cast(Iterator[Row], self.db.execute(
+            'SELECT timestamp, filename, reading, error, modified_at'
+            ' FROM watermeter_image_old ORDER BY filename'))
+        for (n, row) in enumerate(cursor):
+            (time, filename, reading, error, modified_at) = row
+            if n % 1000 == 0:
+                print(f'{n//1000:9d}/{entry_count//1000:9d}\r', end='')
+            yield Entry(time, filename, reading, error, modified_at)
 
     def commit(self) -> None:
         self.db.commit()
@@ -78,7 +113,7 @@ class ValueDatabase:
 
     def get_values_from_date(self, value: date) -> Iterator[ValueRow]:
         cursor = cast(Iterator[Row], self.db.execute(
-            'SELECT timestamp, filename, reading, error, modified_at'
+            'SELECT time, filename, reading, error, modified_at'
             ' FROM watermeter_image'
             ' WHERE filename >= ?'
             ' ORDER BY filename',
@@ -115,7 +150,7 @@ class ValueDatabase:
     def _insert_entries(self, entries: Sequence[Entry]) -> None:
         self.db.executemany(
             'INSERT OR REPLACE INTO watermeter_image'
-            ' (timestamp, filename, reading, error, modified_at) VALUES'
+            ' (time, filename, reading, error, modified_at) VALUES'
             ' (?, ?, ?, ?, ?)', entries)
 
     def is_done_with_month(self, month_dir: str) -> bool:
@@ -139,7 +174,7 @@ class ValueDatabase:
 def entry_to_value_row(entry: Entry) -> ValueRow:
     filename_data = parse_filename(entry.filename, DEFAULT_TZ)
     return ValueRow(
-        timestamp=datetime_from_timestamp(entry.timestamp),
+        timestamp=datetime_from_timestamp(entry.time),
         reading=float(entry.reading) if entry.reading else None,
         error=entry.error,
         filename=entry.filename,

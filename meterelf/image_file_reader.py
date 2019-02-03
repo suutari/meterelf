@@ -181,7 +181,7 @@ class _NewImageProcessorForDir:
             image_data = get_data_of_images(self.meter_value_getter, paths)
         entries = (
             Entry(
-                timestamp=timestamp_from_filename(filename, DEFAULT_TZ),
+                time=timestamp_from_filename(filename, DEFAULT_TZ),
                 filename=filename,
                 reading=file_data[0],
                 error=file_data[1],
