@@ -3,7 +3,7 @@ from datetime import date, datetime, timedelta
 from typing import (
     Any, Iterable, Iterator, NamedTuple, Optional, Sequence, Tuple, cast)
 
-from ._fnparse import FilenameData, parse_filename, timestamp_from_filename
+from ._fnparse import FilenameData, parse_filename
 from ._iter_utils import process_in_blocks
 from ._timestamps import DEFAULT_TZ, datetime_from_timestamp
 
@@ -58,53 +58,11 @@ class ValueDatabase:
             ' ON watermeter_image(filename)')
         self.db.execute(create_filename_idx_sql)
 
-        # Drop deprecated month_day_fn_idx if it exists
-        self.db.execute(
-            'DROP INDEX IF EXISTS month_day_fn_idx')
-
-        # Convert old main table schema to new format if not yet done
-        current_create_db_sql = list(cast(Iterator[Row], self.db.execute(
-            'SELECT sql FROM sqlite_master WHERE name=?',
-            ('watermeter_image',))))[0][0]
-        column_defs = ['month_dir VARCHAR', 'day_dir VARCHAR']
-        if all(x in current_create_db_sql for x in column_defs):
-            self.db.execute(
-                'ALTER TABLE watermeter_image RENAME TO watermeter_image_old')
-            self.db.execute(create_watermeter_image_table_sql)
-
-            self._migrate_old_main_table_data_to_new_format()
-            self.commit()
-
-            self.db.execute('DROP INDEX IF EXISTS filename_idx')
-            self.db.execute(create_filename_idx_sql)
-
-            self.db.execute('DROP TABLE IF EXISTS watermeter_image_old')
-
         self.db.execute(
             'CREATE TABLE IF NOT EXISTS watermeter_thousands ('
             ' iso_date VARCHAR(10),'
             ' value INTEGER'
             ')')
-
-    def _migrate_old_main_table_data_to_new_format(self) -> None:
-        print('Migrating data')
-        entries = self._get_old_data_converted_to_new_format()
-        self.insert_entries(entries)
-        print('\nDone.')
-
-    def _get_old_data_converted_to_new_format(self) -> Iterator[Entry]:
-        entry_count = cast(int, list(self.db.execute(
-            'SELECT COUNT(*) FROM watermeter_image_old'))[0][0])
-        cursor = cast(Iterator[Row], self.db.execute(
-            'SELECT filename, reading, error, modified_at'
-            ' FROM watermeter_image_old ORDER BY filename'))
-        for (n, row) in enumerate(cursor):
-            (filename, reading, error, modified_at) = row
-            if n % 10000 == 0:
-                print(f'{n//10000:9d}/{entry_count//10000:9d}\r', end='')
-            yield Entry(
-                timestamp_from_filename(filename, DEFAULT_TZ),
-                filename, reading, error, int(modified_at * 1_000_000_000))
 
     def commit(self) -> None:
         self.db.commit()
