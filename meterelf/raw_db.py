@@ -125,14 +125,16 @@ class RawDatabase:
 
 
 def get_last_day_of_month(year: int, month: int) -> int:
-    if month in (1, 3, 5, 7, 8, 10, 12):
-        return 31
-    elif month in (4, 6, 9, 11):
-        return 30
+    """
+    Get last day of a month.
 
-    assert month == 2
-    d = date(year, month, 1)
-    if (d.replace(day=28) + timedelta(days=1)).month == 2:
-        return 29
-    else:
-        return 28
+    >>> [get_last_day_of_month(2012, month)
+    ...  for month in [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]]
+    [31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31]
+
+    >>> [get_last_day_of_month(2013, month)
+    ...  for month in [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]]
+    [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31]
+    """
+    (next_y, next_m_minus_1) = divmod((12 * year + (month - 1)) + 1, 12)
+    return (date(next_y, next_m_minus_1 + 1, 1) - timedelta(days=1)).day
