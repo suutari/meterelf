@@ -7,19 +7,19 @@ from typing import Iterable, Iterator, Sequence, Tuple
 
 from ._fnparse import parse_filename
 from ._iter_utils import process_in_blocks
+from ._sqlitedb import Entry, SqliteDatabase
 from ._timestamps import DEFAULT_TZ, time_ns, timestamp_from_datetime
-from .raw_db import Entry, RawDatabase
 
 
 def main(argv: Sequence[str] = sys.argv) -> None:
     db_filename = sys.argv[1]
-    db = RawDatabase(db_filename)
+    db = SqliteDatabase(db_filename)
     entries = get_entries_from_value_files(db)
     insert_or_update_entries(db, entries)
     db.commit()
 
 
-def get_entries_from_value_files(db: RawDatabase) -> Iterator[Entry]:
+def get_entries_from_value_files(db: SqliteDatabase) -> Iterator[Entry]:
     month_dirs = sorted(glob('[12][0-9][0-9][0-9]-[01][0-9]'))
     for month_dir in month_dirs:
         (year, month) = [int(x) for x in month_dir.split('-')]
@@ -51,7 +51,7 @@ def parse_value_file(fn: str) -> Iterator[Tuple[str, str, str]]:
 
 
 def insert_or_update_entries(
-        db: RawDatabase,
+        db: SqliteDatabase,
         entries: Iterable[Entry],
 ) -> None:
     def process_block(block: Sequence[Entry]) -> None:

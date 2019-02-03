@@ -1,7 +1,7 @@
 from datetime import date, datetime
 from typing import Iterator, NamedTuple, Optional
 
-from . import raw_db
+from . import _sqlitedb as raw_db
 from ._fnparse import FilenameData, parse_filename
 from ._timestamps import DEFAULT_TZ, datetime_from_timestamp
 
@@ -17,7 +17,7 @@ class ValueRow(NamedTuple):
 
 class ValueDatabase:
     def __init__(self, filename: str) -> None:
-        self._rdb = raw_db.RawDatabase(filename)
+        self._rdb = raw_db.SqliteDatabase(filename)
 
     def get_thousands_for_date(self, value: date) -> int:
         return self._rdb.get_thousands_for_date(value)

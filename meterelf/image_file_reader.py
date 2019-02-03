@@ -15,13 +15,13 @@ from typing import (
 from . import _api as meterelf
 from ._fnparse import timestamp_from_filename
 from ._iter_utils import process_in_blocks
+from ._sqlitedb import Entry, SqliteDatabase
 from ._timestamps import DEFAULT_TZ, time_ns
-from .raw_db import Entry, RawDatabase
 
 
 def main(argv: Sequence[str] = sys.argv) -> None:
     args = parse_args(argv)
-    db = RawDatabase(args.db_path)
+    db = SqliteDatabase(args.db_path)
     params_file = os.path.abspath(args.params_file.name)
     collector = DataCollector(db, params_file)
     if args.reread_filenames:
@@ -44,7 +44,7 @@ def parse_args(argv: Sequence[str]) -> argparse.Namespace:
 class DataCollector:
     image_extensions = ('.jpg', '.ppm')
 
-    def __init__(self, db: RawDatabase, params_file: str) -> None:
+    def __init__(self, db: SqliteDatabase, params_file: str) -> None:
         self.db = db
         self.meter_value_getter = meterelf.MeterValueGetter(params_file)
 
@@ -146,7 +146,7 @@ class Timer:
 class _NewImageProcessorForDir:
     def __init__(
             self,
-            db: RawDatabase,
+            db: SqliteDatabase,
             meter_value_getter: meterelf.MeterValueGetter,
             directory: str,
             do_replace: bool = False,

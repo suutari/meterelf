@@ -23,7 +23,7 @@ class Row(sqlite3.Row):
         return ', '.join(f'{k}={v!r}' for (k, v) in items)
 
 
-class RawDatabase:
+class SqliteDatabase:
     def __init__(self, filename: str) -> None:
         self.filename = filename
         self.db = sqlite3.connect(filename)
