@@ -84,19 +84,6 @@ class RawDatabase:
             filenames))
         return list(result)[0][0]
 
-    def insert_or_update_entries(self, entries: Iterable[Entry]) -> None:
-        def process_block(block: Sequence[Entry]) -> None:
-            filenames = [x.filename for x in block]
-            existing_count = self.count_existing_filenames(filenames)
-            if existing_count != len(filenames):
-                if existing_count > 0:
-                    block = [
-                        x for x in block
-                        if not self.has_filename(x.filename)]
-                self._insert_entries(block)
-
-        process_in_blocks(entries, process_block)
-
     def insert_entries(self, entries: Iterable[Entry]) -> None:
         process_in_blocks(entries, self._insert_entries)
 

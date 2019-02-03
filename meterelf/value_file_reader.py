@@ -3,9 +3,10 @@
 import os
 import sys
 from glob import glob
-from typing import Iterator, Sequence, Tuple
+from typing import Iterable, Iterator, Sequence, Tuple
 
 from ._fnparse import parse_filename
+from ._iter_utils import process_in_blocks
 from ._timestamps import DEFAULT_TZ, time_ns, timestamp_from_datetime
 from .raw_db import Entry, RawDatabase
 
@@ -14,7 +15,7 @@ def main(argv: Sequence[str] = sys.argv) -> None:
     db_filename = sys.argv[1]
     db = RawDatabase(db_filename)
     entries = get_entries_from_value_files(db)
-    db.insert_or_update_entries(entries)
+    insert_or_update_entries(db, entries)
     db.commit()
 
 
@@ -47,6 +48,23 @@ def parse_value_file(fn: str) -> Iterator[Tuple[str, str, str]]:
                 yield (filename, value_or_error, '')  # value
             else:
                 yield (filename, '', value_or_error)  # error
+
+
+def insert_or_update_entries(
+        db: RawDatabase,
+        entries: Iterable[Entry],
+) -> None:
+    def process_block(block: Sequence[Entry]) -> None:
+        filenames = [x.filename for x in block]
+        existing_count = db.count_existing_filenames(filenames)
+        if existing_count != len(filenames):
+            if existing_count > 0:
+                block = [
+                    x for x in block
+                    if not db.has_filename(x.filename)]
+            db.insert_entries(block)
+
+    process_in_blocks(entries, process_block)
 
 
 if __name__ == '__main__':
