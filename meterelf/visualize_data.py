@@ -5,7 +5,8 @@ import sys
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from decimal import Decimal
-from typing import Callable, Iterator, List, Optional, Sequence, Tuple, Union
+from typing import (
+    Callable, Iterator, List, NamedTuple, Optional, Sequence, Tuple, Union)
 
 from dateutil.parser import parse as parse_datetime
 
@@ -128,7 +129,18 @@ def main(argv: Sequence[str] = sys.argv) -> None:
                 warn=(print_warning if args.verbose else ignore_warning))
 
 
-def parse_args(argv: Sequence[str]) -> argparse.Namespace:
+class Arguments(NamedTuple):
+    db_path: str
+    verbose: bool
+    show_ignores: bool
+    show_raw_data: bool
+    show_influx_data: bool
+    start_from: datetime
+    amend_values: bool
+    resolution: str
+
+
+def parse_args(argv: Sequence[str]) -> Arguments:
     parser = argparse.ArgumentParser()
     parser.add_argument('db_path', type=str, default=None)
     parser.add_argument('--verbose', '-v', action='store_true')
@@ -155,7 +167,16 @@ def parse_args(argv: Sequence[str]) -> argparse.Namespace:
             'w': 'week',
             'M': 'month',
         }[args.resolution]
-    return args
+    return Arguments(
+        db_path=args.db_path,
+        verbose=args.verbose,
+        show_ignores=args.show_ignores,
+        show_raw_data=args.show_raw_data,
+        show_influx_data=args.show_influx_data,
+        start_from=args.start_from,
+        amend_values=args.amend_values,
+        resolution=args.resolution,
+    )
 
 
 def read_file(path: str) -> str:
