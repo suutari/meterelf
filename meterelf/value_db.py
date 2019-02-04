@@ -1,4 +1,4 @@
-from datetime import date, datetime
+from datetime import datetime
 from typing import Iterator, NamedTuple, Optional
 
 from . import _sqlitedb as raw_db
@@ -17,25 +17,14 @@ class ValueRow(NamedTuple):
 
 class ValueGetter:
     def __init__(self, db_path: str, start_from: datetime) -> None:
-        self.value_db = ValueDatabase(db_path)
+        self._db = raw_db.SqliteDatabase(db_path)
         self.start_from = start_from
 
     def get_first_thousand(self) -> int:
-        return self.value_db.get_thousands_for_date(self.start_from.date())
+        return self._db.get_thousands_for_date(self.start_from.date())
 
     def get_values(self) -> Iterator[ValueRow]:
-        return self.value_db.get_values_from_date(self.start_from.date())
-
-
-class ValueDatabase:
-    def __init__(self, filename: str) -> None:
-        self._rdb = raw_db.SqliteDatabase(filename)
-
-    def get_thousands_for_date(self, value: date) -> int:
-        return self._rdb.get_thousands_for_date(value)
-
-    def get_values_from_date(self, value: date) -> Iterator[ValueRow]:
-        entries = self._rdb.get_entries_from_date(value)
+        entries = self._db.get_entries_from_date(self.start_from.date())
         return (entry_to_value_row(x) for x in entries)
 
 
