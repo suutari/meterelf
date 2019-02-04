@@ -15,6 +15,18 @@ class ValueRow(NamedTuple):
     modified_at: datetime
 
 
+class ValueGetter:
+    def __init__(self, db_path: str, start_from: datetime) -> None:
+        self.value_db = ValueDatabase(db_path)
+        self.start_from = start_from
+
+    def get_first_thousand(self) -> int:
+        return self.value_db.get_thousands_for_date(self.start_from.date())
+
+    def get_values(self) -> Iterator[ValueRow]:
+        return self.value_db.get_values_from_date(self.start_from.date())
+
+
 class ValueDatabase:
     def __init__(self, filename: str) -> None:
         self._rdb = raw_db.SqliteDatabase(filename)

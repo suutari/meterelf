@@ -10,7 +10,7 @@ from typing import Callable, Iterator, List, Optional, Sequence, Tuple, Union
 from dateutil.parser import parse as parse_datetime
 
 from ._fnparse import FilenameData
-from .value_db import ValueDatabase, ValueRow
+from .value_db import ValueGetter, ValueRow
 
 START_FROM = parse_datetime('2018-09-24T00:00:00+03:00')
 THOUSAND_WRAP_THRESHOLD = 700  # litres
@@ -126,18 +126,6 @@ def main(argv: Sequence[str] = sys.argv) -> None:
                 resolution=args.resolution,
                 amend_values=args.amend_values,
                 warn=(print_warning if args.verbose else ignore_warning))
-
-
-class ValueGetter:
-    def __init__(self, db_path: str, start_from: datetime) -> None:
-        self.value_db = ValueDatabase(db_path)
-        self.start_from = start_from
-
-    def get_first_thousand(self) -> int:
-        return self.value_db.get_thousands_for_date(self.start_from.date())
-
-    def get_values(self) -> Iterator[ValueRow]:
-        return self.value_db.get_values_from_date(self.start_from.date())
 
 
 def parse_args(argv: Sequence[str]) -> argparse.Namespace:
