@@ -10,7 +10,7 @@ from typing import Callable, Iterator, List, Optional, Sequence, Tuple, Union
 from dateutil.parser import parse as parse_datetime
 
 from ._fnparse import FilenameData
-from .value_db import ValueGetter, ValueRow
+from ._value_getter import ValueGetter, ValueRow
 
 START_FROM = parse_datetime('2018-09-24T00:00:00+03:00')
 THOUSAND_WRAP_THRESHOLD = 700  # litres
