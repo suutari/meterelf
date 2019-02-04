@@ -35,7 +35,7 @@ def get_entries_from_value_files(db: StoringDatabase) -> Iterator[Entry]:
                 print(f'Doing {val_fn}')
                 for (filename, value, error) in parse_value_file(val_fn):
                     fn_data = parse_filename(filename, DEFAULT_TZ)
-                    timestamp = timestamp_from_datetime(fn_data.timestamp)
+                    timestamp = timestamp_from_datetime(fn_data.time)
                     yield Entry(timestamp, filename, value, error, time_ns())
 
 

@@ -14,14 +14,14 @@ class TzInfo(Protocol):
 
 
 class FilenameData(NamedTuple):
-    timestamp: datetime
+    time: datetime
     event_number: Optional[int]
     is_snapshot: bool
     extension: str
 
 
 def timestamp_from_filename(filename: str, tz: TzInfo) -> int:
-    return timestamp_from_datetime(parse_filename(filename, tz).timestamp)
+    return timestamp_from_datetime(parse_filename(filename, tz).time)
 
 
 def parse_filename(filename: str, tz: TzInfo) -> FilenameData:
@@ -40,7 +40,7 @@ def parse_filename(filename: str, tz: TzInfo) -> FilenameData:
     full_dt = dt if dt.tzinfo else tz.localize(dt)
 
     return FilenameData(
-        timestamp=full_dt,
+        time=full_dt,
         event_number=int(parts['evnum']) if parts['evnum'] else None,
         is_snapshot=(parts['snap'] == 'snapshot'),
         extension=parts['ext'],
