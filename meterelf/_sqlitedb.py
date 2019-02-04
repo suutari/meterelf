@@ -1,16 +1,9 @@
 import sqlite3
 from datetime import date, timedelta
-from typing import Any, Iterable, Iterator, NamedTuple, Sequence, Tuple, cast
+from typing import Any, Iterable, Iterator, Sequence, Tuple, cast
 
+from ._db import Entry
 from ._iter_utils import process_in_blocks
-
-
-class Entry(NamedTuple):
-    time: int
-    filename: str
-    reading: str
-    error: str
-    modified_at: int
 
 
 class Row(sqlite3.Row):
