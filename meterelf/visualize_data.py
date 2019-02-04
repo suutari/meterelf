@@ -11,6 +11,7 @@ from typing import (
 from dateutil.parser import parse as parse_datetime
 
 from ._fnparse import FilenameData
+from ._sqlitedb import SqliteDatabase
 from ._value_getter import ValueGetter, ValueRow
 
 START_FROM = parse_datetime('2018-09-24T00:00:00+03:00')
@@ -113,7 +114,8 @@ class CumulativeGroupedData(GroupedData):
 
 def main(argv: Sequence[str] = sys.argv) -> None:
     args = parse_args(argv)
-    value_getter = ValueGetter(args.db_path, args.start_from)
+    sqlite_db = SqliteDatabase(args.db_path)
+    value_getter = ValueGetter(sqlite_db, args.start_from)
     if args.show_ignores:
         print_ignores(value_getter)
     else:

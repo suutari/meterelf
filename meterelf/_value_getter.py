@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Iterator, NamedTuple, Optional
 
-from . import _sqlitedb as raw_db
+from ._db import Entry, QueryingDatabase
 from ._fnparse import FilenameData, parse_filename
 from ._timestamps import DEFAULT_TZ, datetime_from_timestamp
 
@@ -16,8 +16,8 @@ class ValueRow(NamedTuple):
 
 
 class ValueGetter:
-    def __init__(self, db_path: str, start_from: datetime) -> None:
-        self._db = raw_db.SqliteDatabase(db_path)
+    def __init__(self, db: QueryingDatabase, start_from: datetime) -> None:
+        self._db = db
         self.start_from = start_from
 
     def get_first_thousand(self) -> int:
@@ -28,7 +28,7 @@ class ValueGetter:
         return (entry_to_value_row(x) for x in entries)
 
 
-def entry_to_value_row(entry: raw_db.Entry) -> ValueRow:
+def entry_to_value_row(entry: Entry) -> ValueRow:
     filename_data = parse_filename(entry.filename, DEFAULT_TZ)
     return ValueRow(
         time=datetime_from_timestamp(entry.time),
