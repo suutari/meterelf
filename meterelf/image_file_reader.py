@@ -13,6 +13,7 @@ from typing import (
     Callable, Dict, Iterable, Iterator, Optional, Sequence, Tuple)
 
 from . import _api as meterelf
+from ._db import StoringDatabase
 from ._fnparse import timestamp_from_filename
 from ._iter_utils import process_in_blocks
 from ._sqlitedb import Entry, SqliteDatabase
@@ -44,7 +45,7 @@ def parse_args(argv: Sequence[str]) -> argparse.Namespace:
 class DataCollector:
     image_extensions = ('.jpg', '.ppm')
 
-    def __init__(self, db: SqliteDatabase, params_file: str) -> None:
+    def __init__(self, db: StoringDatabase, params_file: str) -> None:
         self.db = db
         self.meter_value_getter = meterelf.MeterValueGetter(params_file)
 
@@ -146,7 +147,7 @@ class Timer:
 class _NewImageProcessorForDir:
     def __init__(
             self,
-            db: SqliteDatabase,
+            db: StoringDatabase,
             meter_value_getter: meterelf.MeterValueGetter,
             directory: str,
             do_replace: bool = False,

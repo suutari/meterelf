@@ -5,6 +5,7 @@ import sys
 from glob import glob
 from typing import Iterable, Iterator, Sequence, Tuple
 
+from ._db import StoringDatabase
 from ._fnparse import parse_filename
 from ._iter_utils import process_in_blocks
 from ._sqlitedb import Entry, SqliteDatabase
@@ -19,7 +20,7 @@ def main(argv: Sequence[str] = sys.argv) -> None:
     db.commit()
 
 
-def get_entries_from_value_files(db: SqliteDatabase) -> Iterator[Entry]:
+def get_entries_from_value_files(db: StoringDatabase) -> Iterator[Entry]:
     month_dirs = sorted(glob('[12][0-9][0-9][0-9]-[01][0-9]'))
     for month_dir in month_dirs:
         (year, month) = [int(x) for x in month_dir.split('-')]
@@ -51,7 +52,7 @@ def parse_value_file(fn: str) -> Iterator[Tuple[str, str, str]]:
 
 
 def insert_or_update_entries(
-        db: SqliteDatabase,
+        db: StoringDatabase,
         entries: Iterable[Entry],
 ) -> None:
     def process_block(block: Sequence[Entry]) -> None:
