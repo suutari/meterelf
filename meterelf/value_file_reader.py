@@ -39,16 +39,16 @@ def get_entries_from_value_files(db: StoringDatabase) -> Iterator[Entry]:
                     yield Entry(timestamp, filename, value, error, time_ns())
 
 
-def parse_value_file(fn: str) -> Iterator[Tuple[str, str, str]]:
+def parse_value_file(fn: str) -> Iterator[Tuple[str, Optional[float], str]]:
     with open(fn, 'rt') as value_file:
         for line in value_file:
             if ': ' not in line:
                 raise Exception(f'Invalid line in file: {line}')
             (filename, value_or_error) = line.rstrip().split(': ', 1)
             if value_or_error.replace('.', '').isdigit():
-                yield (filename, value_or_error, '')  # value
+                yield (filename, float(value_or_error), '')  # value
             else:
-                yield (filename, '', value_or_error)  # error
+                yield (filename, None, value_or_error)  # error
 
 
 def insert_or_update_entries(

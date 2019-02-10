@@ -3,6 +3,7 @@ from datetime import date, timedelta
 from typing import Any, Iterable, Iterator, Sequence, Tuple, cast
 
 from ._db import Entry
+from ._db_utils import make_float
 from ._iter_utils import process_in_blocks
 
 
@@ -65,7 +66,13 @@ class SqliteDatabase:
             ' ORDER BY filename',
             (f'{value:%Y%m%d_}',)))
         for row in cursor:
-            yield Entry(*row)
+            yield Entry(
+                time=int(row[0]),
+                filename=str(row[1]),
+                reading=make_float(row[2]),
+                error=str(row[3]),
+                modified_at=int(row[4]),
+            )
 
     def has_filename(self, filename: str) -> bool:
         return (self.count_existing_filenames([filename]) > 0)

@@ -197,7 +197,7 @@ class _NewImageProcessorForDir:
 def get_data_of_images(
         meter_value_getter: meterelf.MeterValueGetter,
         paths: Iterable[str],
-) -> Dict[str, Tuple[str, str]]:
+) -> Dict[str, Tuple[Optional[float], str]]:
     if not paths:
         return {}
     with multiprocessing.Pool() as pool:
@@ -207,11 +207,11 @@ def get_data_of_images(
 
 def _format_image_data(
         data: meterelf.MeterImageData,
-) -> Tuple[str, Tuple[str, str]]:
-    value_str = f'{data.value:07.3f}' if data.value else ''
+) -> Tuple[str, Tuple[Optional[float], str]]:
+    value_str = f'{data.value:07.3f}' if data.value is not None else ''
     error_str = f'{data.error}' if data.error else ''
     print(f'{data.filename}:\t{value_str}{error_str}')
-    return (os.path.basename(data.filename), (value_str, error_str))
+    return (os.path.basename(data.filename), (data.value, error_str))
 
 
 if __name__ == '__main__':

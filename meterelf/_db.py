@@ -1,5 +1,5 @@
 from datetime import date
-from typing import Iterable, NamedTuple, Sequence
+from typing import Iterable, NamedTuple, Optional, Sequence
 
 from typing_extensions import Protocol
 
@@ -7,7 +7,7 @@ from typing_extensions import Protocol
 class Entry(NamedTuple):
     time: int
     filename: str
-    reading: str
+    reading: Optional[float]
     error: str
     modified_at: int
 
