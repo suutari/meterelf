@@ -3,7 +3,6 @@ from typing import Union
 from ._influxdb import InfluxDatabase
 from ._sqlitedb import SqliteDatabase
 
-
 AnyDatabase = Union[InfluxDatabase, SqliteDatabase]
 
 
