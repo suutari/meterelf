@@ -28,7 +28,7 @@ def parse_filename(filename: str, tz: TzInfo) -> FilenameData:
     m = _FILENAME_RX.match(filename)
 
     if not m:
-        raise Exception(f'Unknown filename: {filename}')
+        raise ValueError(f'Unknown filename: {filename}')
 
     parts = m.groupdict()
 
