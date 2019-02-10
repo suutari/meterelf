@@ -25,6 +25,10 @@ def datetime_from_timestamp(
         timestamp: int,
         tz: tzinfo = DEFAULT_TZ,
 ) -> datetime:
-    naive_dt = datetime.utcfromtimestamp(timestamp / 1_000_000_000)
-    utc_dt = naive_dt.replace(tzinfo=pytz.UTC)
+    utc_dt = utc_datetime_from_timestamp(timestamp)
     return utc_dt.astimezone(tz)
+
+
+def utc_datetime_from_timestamp(timestamp: int) -> datetime:
+    naive_dt = datetime.utcfromtimestamp(timestamp / 1_000_000_000)
+    return naive_dt.replace(tzinfo=pytz.UTC)
