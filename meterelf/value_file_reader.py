@@ -3,18 +3,18 @@
 import os
 import sys
 from glob import glob
-from typing import Iterable, Iterator, Sequence, Tuple
+from typing import Iterable, Iterator, Optional, Sequence, Tuple
 
-from ._db import StoringDatabase
+from ._db import Entry, StoringDatabase
+from ._db_url import get_db
 from ._fnparse import parse_filename
 from ._iter_utils import process_in_blocks
-from ._sqlitedb import Entry, SqliteDatabase
 from ._timestamps import DEFAULT_TZ, time_ns, timestamp_from_datetime
 
 
 def main(argv: Sequence[str] = sys.argv) -> None:
-    db_filename = sys.argv[1]
-    db = SqliteDatabase(db_filename)
+    db_url = sys.argv[1]
+    db = get_db(db_url)
     entries = get_entries_from_value_files(db)
     insert_or_update_entries(db, entries)
     db.commit()

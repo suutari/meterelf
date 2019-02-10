@@ -13,16 +13,16 @@ from typing import (
     Callable, Dict, Iterable, Iterator, Optional, Sequence, Tuple)
 
 from . import _api as meterelf
-from ._db import StoringDatabase
+from ._db import Entry, StoringDatabase
+from ._db_url import get_db
 from ._fnparse import timestamp_from_filename
 from ._iter_utils import process_in_blocks
-from ._sqlitedb import Entry, SqliteDatabase
 from ._timestamps import DEFAULT_TZ, time_ns
 
 
 def main(argv: Sequence[str] = sys.argv) -> None:
     args = parse_args(argv)
-    db = SqliteDatabase(args.db_path)
+    db = get_db(args.db_url)
     params_file = os.path.abspath(args.params_file.name)
     collector = DataCollector(db, params_file)
     if args.reread_filenames:
@@ -34,7 +34,7 @@ def main(argv: Sequence[str] = sys.argv) -> None:
 
 def parse_args(argv: Sequence[str]) -> argparse.Namespace:
     parser = argparse.ArgumentParser()
-    parser.add_argument('db_path', type=str, default=None)
+    parser.add_argument('db_url', type=str, default=None)
     parser.add_argument('params_file', type=argparse.FileType('r'))
     parser.add_argument('--days', '-d', type=int, nargs='?')
     parser.add_argument('--reread-filenames', '-r', nargs='*', metavar='PATH')

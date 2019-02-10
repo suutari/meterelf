@@ -10,8 +10,8 @@ from typing import (
 
 from dateutil.parser import parse as parse_datetime
 
+from ._db_url import get_db
 from ._fnparse import FilenameData
-from ._sqlitedb import SqliteDatabase
 from ._value_getter import ValueGetter, ValueRow
 
 START_FROM = parse_datetime('2018-09-24T00:00:00+03:00')
@@ -114,8 +114,8 @@ class CumulativeGroupedData(GroupedData):
 
 def main(argv: Sequence[str] = sys.argv) -> None:
     args = parse_args(argv)
-    sqlite_db = SqliteDatabase(args.db_path)
-    value_getter = ValueGetter(sqlite_db, args.start_from)
+    db = get_db(args.db_url)
+    value_getter = ValueGetter(db, args.start_from)
     if args.show_ignores:
         print_ignores(value_getter)
     else:
@@ -132,7 +132,7 @@ def main(argv: Sequence[str] = sys.argv) -> None:
 
 
 class Arguments(NamedTuple):
-    db_path: str
+    db_url: str
     verbose: bool
     show_ignores: bool
     show_raw_data: bool
@@ -144,7 +144,7 @@ class Arguments(NamedTuple):
 
 def parse_args(argv: Sequence[str]) -> Arguments:
     parser = argparse.ArgumentParser()
-    parser.add_argument('db_path', type=str, default=None)
+    parser.add_argument('db_url', type=str, default=None)
     parser.add_argument('--verbose', '-v', action='store_true')
     parser.add_argument('--show-ignores', '-i', action='store_true')
     parser.add_argument('--show-raw-data', '-R', action='store_true')
@@ -170,7 +170,7 @@ def parse_args(argv: Sequence[str]) -> Arguments:
             'M': 'month',
         }[args.resolution]
     return Arguments(
-        db_path=args.db_path,
+        db_url=args.db_url,
         verbose=args.verbose,
         show_ignores=args.show_ignores,
         show_raw_data=args.show_raw_data,
