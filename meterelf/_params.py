@@ -24,7 +24,7 @@ class Params:
             message = 'Cannot load YAML data from {}'.format(filename)
             raise LoadError(message) from error
         if not isinstance(data, dict):
-            raise LoadError('Not a valid parameters file: {}'.format(filename))
+            raise LoadError(f'Not a valid parameters file: {filename}')
         return cls(os.path.dirname(filename), data)
 
     def __init__(self, base_dir: str, data: Dict[Any, Any]) -> None:
@@ -45,7 +45,7 @@ class Params:
 
         needle_data_dicts = d.list('needle_data', dict)
         if not needle_data_dicts:
-            raise ValueError('Must have data of at least one needle')
+            raise LoadError('Must have data of at least one needle')
         needles = [_Needle(x) for x in needle_data_dicts]
 
         self.dial_color_range: Dict[str, HlsColor] = {
@@ -112,17 +112,15 @@ class TypeCheckedGetter:
         items = self._get_value(list, name)
         for (n, item) in enumerate(items):
             if not isinstance(item, tp):
-                raise TypeError('Item {} in {} is not {}'.format(
-                    n, name, tp.__name__))
+                raise LoadError(f'Item {n} in {name} is not {tp.__name__}')
         if length is not None and len(items) != length:
-            raise TypeError('{} must have exactly {} items'.format(
-                name, length))
+            raise LoadError(f'{name} must have exactly {length} items')
         return items
 
     def filename(self, name: str) -> str:
         fn = self.glob(name)
         if not os.path.exists(fn):
-            raise FileNotFoundError(fn)
+            raise LoadError(f'File not found: {fn}')
         return fn
 
     def glob(self, name: str) -> str:
@@ -153,5 +151,5 @@ class TypeCheckedGetter:
     def _get_value(self, tp: Type[_T], name: str) -> _T:
         value = self.data[name]
         if not isinstance(value, tp):
-            raise TypeError('{} is not {}'.format(name, tp.__name__))
+            raise LoadError(f'{name} is not {tp.__name__}')
         return value

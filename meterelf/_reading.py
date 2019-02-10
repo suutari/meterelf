@@ -13,6 +13,7 @@ from ._types import DialData, Image, PointAsArray, Rect
 from ._utils import (
     convert_to_bgr, crop_rect, find_non_zero, float_point_to_int,
     get_angle_by_vector, get_mask_by_color, scale_image)
+from .exceptions import DialAngleDeterminingError, NeedleContoursNotFoundError
 
 
 def get_meter_value(imgf: ImageFile) -> Dict[str, float]:
@@ -95,16 +96,14 @@ def get_meter_value(imgf: ImageFile) -> Dict[str, float]:
         dial_positions[dial_name] = (10.0 * fixed_angle) % 10.0
 
     if unreadable_dials:
+        extra_info = {}
         if _debug.DEBUG:
-            extra_info = ' (' + ' | '.join(
+            extra_info['dial positions'] = ' (' + ' | '.join(
                 '{}: {}'.format(
                     k, '{:.2f}'.format(v) if v is not None else '-.--')
                 for (k, v) in sorted(dial_positions.items())) + ')'
-        else:
-            extra_info = ''
-        raise ValueError(
-            'Cannot determine angle for dial {}{}'.format(
-                unreadable_dials[0], extra_info))
+        extra_info['unreadable dials'] = ', '.join(unreadable_dials)
+        raise DialAngleDeterminingError(imgf.filename, extra_info=extra_info)
 
     result = dial_positions.copy()
 
@@ -136,8 +135,7 @@ def get_needle_points(
         cv2.CHAIN_APPROX_NONE)
 
     if not contours:
-        raise ValueError(
-            "Cannot find needle contours in dial {}".format(dial_data.name))
+        raise NeedleContoursNotFoundError(extra_info={'dial': dial_data.name})
 
     contour = sorted(contours, key=cv2.contourArea)[-1]
     if cv2.contourArea(contour) > 100:

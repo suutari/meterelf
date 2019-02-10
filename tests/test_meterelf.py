@@ -155,17 +155,15 @@ def test_raises_on_debug_mode(capsys, filename):
         with cwd_as(project_dir):
             with pytest.raises(Exception) as excinfo:
                 _main.main(['meterelf', params_fn] + [image_path])
-            assert str(excinfo.value) == error_msg.format(fn=image_path)
+            assert excinfo.value.get_message() == error_msg
     captured = capsys.readouterr()
     assert captured.out == ''
     assert captured.err == ''
 
 
 EXPECTED_ERRORS = {
-    '20180814021309-01-e01.jpg': (
-        'Dials not found from {fn} (match val = 0.0)'),
-    '20180814021310-00-e02.jpg': (
-        'Dials not found from {fn} (match val = 17495704.0)'),
+    '20180814021309-01-e01.jpg': 'Dials not found (match val = 0.0)',
+    '20180814021310-00-e02.jpg': 'Dials not found (match val = 17495704.0)',
 }
 
 
@@ -188,11 +186,3 @@ def test_output_in_debug_mode(capsys):
     assert abs(debug_data['0.1'] - 2.4) < 0.05
     assert abs(debug_data['value'] - 253.62306) < 0.000005
     assert captured.err == ''
-
-
-EXPECTED_ERRORS = {
-    '20180814021309-01-e01.jpg': (
-        'Dials not found from {fn} (match val = 0.0)'),
-    '20180814021310-00-e02.jpg': (
-        'Dials not found from {fn} (match val = 17495704.0)'),
-}
