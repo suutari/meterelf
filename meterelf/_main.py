@@ -15,6 +15,8 @@ def main(argv: Sequence[str] = sys.argv) -> None:
     for data in get_meter_values(params_file, filenames):
         print(data.filename, end='')  # noqa
         value_str = '{:07.3f}'.format(data.value) if data.value else ''
-        error_str = 'UNKNOWN {}'.format(data.error) if data.error else ''
+        error_str = (
+            'UNKNOWN {}'.format(data.error.get_message()) if data.error
+            else '')
         extra = ' {!r}'.format(data.meter_values) if _debug.DEBUG else ''
         print(f': {value_str}{error_str}{extra}')  # noqa

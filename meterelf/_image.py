@@ -6,6 +6,7 @@ import numpy
 from ._params import Params as _Params
 from ._types import Image, TemplateMatchResult
 from ._utils import convert_to_hls, crop_rect, match_template
+from .exceptions import DialsNotFoundError, ImageLoadingError
 
 
 class ImageFile:
@@ -47,8 +48,7 @@ class ImageFile:
             return self.bgr_image
         img = cv2.imread(self.filename)
         if img is None:
-            raise Exception(
-                "Unable to read image file: {}".format(self.filename))
+            raise ImageLoadingError(self.filename)
         return self._crop_meter(img)
 
     def _crop_meter(self, img: Image) -> Image:
@@ -60,8 +60,8 @@ class ImageFile:
         match_result = match_template(lightness, template)
 
         if match_result.max_val < self.params.dials_match_threshold:
-            raise ValueError('Dials not found from {} (match val = {})'.format(
-                self.filename, match_result.max_val))
+            raise DialsNotFoundError(
+                self.filename, extra_info={'match val': match_result.max_val})
 
         return match_result
 
