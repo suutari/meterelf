@@ -19,7 +19,7 @@ THOUSAND_WRAP_THRESHOLD = 700  # litres
 VALUE_MODULO = 1000
 VALUE_MAX_LEAP = 300  # litres (change per sample)
 VALUE_MAX_DIFFS = {
-    'normal': 7.0,  # litres per second
+    'normal': 8.0,  # litres per second
     'reverse': 2.0,  # litres per second
     'snapshot': 0.01,  # litres per second
 }
