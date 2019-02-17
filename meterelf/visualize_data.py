@@ -605,11 +605,12 @@ class DataGatherer:
                 continue
 
             # Thousand counter
-            if lv is not None and v - lv < -THOUSAND_WRAP_THRESHOLD:
-                thousands += 1
+            nthousands = thousands + (
+                1 if lv is not None and v - lv < -THOUSAND_WRAP_THRESHOLD else
+                0)
 
             # Compose fv = Full Value and dfv = Diff of Full Value
-            fv = (1000 * thousands) + v
+            fv = (1000 * nthousands) + v
             dfv = (fv - lfv) if lfv is not None else None  # type: ignore
             correction = 0.0
 
@@ -683,6 +684,7 @@ class DataGatherer:
             yield InterpretedPoint.create_value(row1, fv, ddt, dfv, correction)
 
             # Update last values
+            thousands = nthousands
             lfv = fv
             lv = v
             ldt = dt
