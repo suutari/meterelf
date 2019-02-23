@@ -47,6 +47,13 @@ class SqliteDatabase:
             ' iso_date VARCHAR(10),'
             ' value INTEGER'
             ')')
+        self.db.execute(
+            'DELETE FROM watermeter_thousands WHERE rowid NOT IN ('
+            ' SELECT MIN(rowid) FROM watermeter_thousands'
+            ' GROUP BY iso_date)')
+        self.db.execute(
+            'CREATE UNIQUE INDEX IF NOT EXISTS thousands_idx'
+            ' ON watermeter_thousands(iso_date)')
 
     def commit(self) -> None:
         self.db.commit()
