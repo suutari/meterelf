@@ -252,7 +252,7 @@ def generate_raw_data(
              if x.dt is not None else ''),
             ('correction', f'{x.correction:.3f}'),
             ('event_num', f'{x.filename_data.event_number or ""}'),
-            ('format', f'{x.filename_data.extension or ""}'),
+            ('format', f'"{x.filename_data.extension or ""}"'),
             ('snapshot', 't' if x.filename_data.is_snapshot else 'f'),
             ('filename', f'"{x.filename}"'),
         ]
