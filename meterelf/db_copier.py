@@ -25,8 +25,8 @@ def _copy_thousands(from_db: QueryingDatabase, to_db: StoringDatabase) -> None:
     print('Copying thousands...')
     items = list(from_db.get_thousands())
     for (n, item) in enumerate(items, 1):
-        print(f'{n:3d}/{len(items):3d}', end='\r')
         (time, value) = item
+        print(f'{n:3d} / {len(items):3d} | {time}: {value:4d}')
         to_db.set_thousands_for(time, value)
     print('\nDone')
 
