@@ -1,5 +1,5 @@
-from datetime import date
-from typing import Iterable, NamedTuple, Optional, Sequence
+from datetime import datetime
+from typing import Iterable, NamedTuple, Optional, Sequence, Tuple
 
 from typing_extensions import Protocol
 
@@ -25,6 +25,9 @@ class StoringDatabase(Protocol):
     def insert_entries(self, entries: Iterable[Entry]) -> None:
         ...
 
+    def set_thousands_for(self, time: datetime, value: int) -> None:
+        ...
+
     def is_done_with_month(self, year: int, month: int) -> bool:
         ...
 
@@ -33,8 +36,11 @@ class StoringDatabase(Protocol):
 
 
 class QueryingDatabase(Protocol):
-    def get_thousands_for_date(self, value: date) -> int:
+    def get_thousands(self) -> Iterable[Tuple[datetime, int]]:
         ...
 
-    def get_entries_from_date(self, value: date) -> Iterable[Entry]:
+    def get_thousands_for(self, time: datetime) -> int:
+        ...
+
+    def get_entries(self, start: Optional[datetime] = None) -> Iterable[Entry]:
         ...

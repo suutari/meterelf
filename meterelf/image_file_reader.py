@@ -209,7 +209,7 @@ def _format_image_data(
         data: meterelf.MeterImageData,
 ) -> Tuple[str, Tuple[Optional[float], str]]:
     value_str = f'{data.value:07.3f}' if data.value is not None else ''
-    error_str = f'{data.error}' if data.error else ''
+    error_str = f'{data.error.get_message()}' if data.error else ''
     print(f'{data.filename}:\t{value_str}{error_str}')
     return (os.path.basename(data.filename), (data.value, error_str))
 

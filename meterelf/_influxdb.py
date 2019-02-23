@@ -1,5 +1,5 @@
-from datetime import date, datetime, timedelta
-from typing import Iterable, Sequence, Tuple, TypeVar
+from datetime import datetime, timedelta
+from typing import Iterable, Optional, Sequence, Tuple, TypeVar
 
 from influxdb import InfluxDBClient  # type: ignore
 
@@ -8,7 +8,8 @@ from ._db_utils import make_float
 from ._fnparse import parse_filename, timestamp_from_filename
 from ._influxhelper import SeriesInserter
 from ._time_utils import get_last_day_of_month
-from ._timestamps import DEFAULT_TZ, timestamp_from_datetime
+from ._timestamps import (
+    DEFAULT_TZ, datetime_from_timestamp, timestamp_from_datetime)
 
 
 class InfluxDatabase:
@@ -56,46 +57,56 @@ class InfluxDatabase:
         return self.is_done_with_day(year, month, last_day)
 
     def is_done_with_day(self, year: int, month: int, day: int) -> bool:
-        day_date = date(year, month, day)
-        age = (date.today() - day_date)
+        day_start_dt = DEFAULT_TZ.localize(datetime(year, month, day, 0, 0))
+        age = DEFAULT_TZ.localize(datetime.now()) - day_start_dt
 
         if age.days <= 1:
             return False
 
-        day_start_dt = _to_aware_datetime(day_date)
-        gap_start = timestamp_from_datetime(
+        gap_start = (
             day_start_dt + timedelta(hours=23, minutes=0) if age.days > 7 else
             day_start_dt + timedelta(hours=23, minutes=55))
-        gap_end = timestamp_from_datetime(day_start_dt + timedelta(hours=24))
+        gap_end = (day_start_dt + timedelta(hours=24))
+        return self.count_entries_in_range(gap_start, gap_end) >= 1
 
+    def count_entries_in_range(self, start: datetime, end: datetime) -> int:
         resultset = self._conn.query(
             f'SELECT COUNT(filename) FROM raw'
-            f' WHERE time >= {gap_start} AND time < {gap_end}')
+            f' WHERE time >= {timestamp_from_datetime(start)}'
+            f' AND time < {timestamp_from_datetime(end)}')
         for point in resultset.get_points():
-            return (point['count'] >= 1)  # type: ignore
-        return False
+            return point['count']  # type: ignore
+        return 0
 
-    def set_thousands_for_date(self, day: date, value: int) -> None:
+    def set_thousands_for(self, time: datetime, value: int) -> None:
         inserter = SeriesInserter(self._conn, 'thousands', [], ['value'])
-        inserter.insert(
-            time=timestamp_from_datetime(_to_aware_datetime(day)),
-            value=value,
-        )
+        inserter.insert(time=timestamp_from_datetime(time), value=value)
         inserter.commit()
 
-    def get_thousands_for_date(self, day: date) -> int:
-        ts = timestamp_from_datetime(_to_aware_datetime(day))
+    def get_thousands_for(self, time: datetime) -> int:
+        ts = timestamp_from_datetime(time)
         resultset = self._conn.query(
             f'SELECT * FROM thousands WHERE time = {ts}',
             epoch='ns')
         for point in resultset.get_points():
             return point['value']  # type: ignore
-        raise ValueError(f'No thousand value known for date {day}')
+        raise ValueError(f'No thousand value known for {time}')
 
-    def get_entries_from_date(self, value: date) -> Iterable[Entry]:
-        start = timestamp_from_datetime(_to_aware_datetime(value))
+    def get_thousands(self) -> Iterable[Tuple[datetime, int]]:
         resultset = self._conn.query(
-            f'SELECT * FROM raw WHERE time >= {start} ORDER BY time',
+            f'SELECT * FROM thousands ORDER BY time',
+            epoch='ns')
+        for point in resultset.get_points():
+            timestamp: int = point['time']
+            value: int = point['value']
+            time = datetime_from_timestamp(timestamp)
+            yield (time, value)
+
+    def get_entries(self, start: Optional[datetime] = None) -> Iterable[Entry]:
+        where = (
+            f'WHERE time >= {timestamp_from_datetime(start)}' if start else '')
+        resultset = self._conn.query(
+            f'SELECT * FROM raw {where} ORDER BY time',
             epoch='ns')
         for point in resultset.get_points():
             yield Entry(
@@ -105,10 +116,6 @@ class InfluxDatabase:
                 error=str(point.get('error') or ''),
                 modified_at=int(point['modified_at']),
             )
-
-
-def _to_aware_datetime(d: date) -> datetime:
-    return DEFAULT_TZ.localize(datetime(d.year, d.month, d.day, 0, 0))
 
 
 T = TypeVar('T')

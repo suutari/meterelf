@@ -1,11 +1,12 @@
 import sqlite3
-from datetime import date
-from typing import Any, Iterable, Iterator, Sequence, Tuple, cast
+from datetime import date, datetime
+from typing import Any, Iterable, Iterator, Optional, Sequence, Tuple, cast
 
 from ._db import Entry
 from ._db_utils import make_float
 from ._iter_utils import process_in_blocks
 from ._time_utils import get_last_day_of_month
+from ._timestamps import DEFAULT_TZ
 
 
 class Row(sqlite3.Row):
@@ -50,8 +51,14 @@ class SqliteDatabase:
     def commit(self) -> None:
         self.db.commit()
 
-    def get_thousands_for_date(self, value: date) -> int:
-        iso_date = value.isoformat()
+    def set_thousands_for(self, time: datetime, value: int) -> None:
+        iso_date = time.date().isoformat()
+        self.db.execute(
+            'INSERT OR REPLACE INTO watermeter_thousands (iso_date, value)'
+            ' VALUES (?, ?)', (iso_date, value))
+
+    def get_thousands_for(self, time: datetime) -> int:
+        iso_date = time.date().isoformat()
         cursor = cast(Iterator[Tuple[int]], self.db.execute(
             'SELECT value FROM watermeter_thousands'
             ' WHERE iso_date=?', (iso_date,)))
@@ -59,13 +66,23 @@ class SqliteDatabase:
             return row[0]
         raise ValueError(f'No thousand value known for date {iso_date}')
 
-    def get_entries_from_date(self, value: date) -> Iterator[Entry]:
+    def get_thousands(self) -> Iterable[Tuple[datetime, int]]:
+        cursor = cast(Iterator[Tuple[str, int]], self.db.execute(
+            'SELECT iso_date, value FROM watermeter_thousands'
+            ' ORDER BY iso_date'))
+        for (iso_date, value) in cursor:
+            naive_dt = datetime.fromisoformat(iso_date)
+            yield (DEFAULT_TZ.localize(naive_dt), value)
+
+    def get_entries(self, start: Optional[datetime] = None) -> Iterator[Entry]:
+        where = 'WHERE filename >= ?' if start else ''
+        args = [f'{start:%Y%m%d_}'] if start else []
         cursor = cast(Iterator[Row], self.db.execute(
-            'SELECT time, filename, reading, error, modified_at'
-            ' FROM watermeter_image'
-            ' WHERE filename >= ?'
-            ' ORDER BY filename',
-            (f'{value:%Y%m%d_}',)))
+            f'SELECT time, filename, reading, error, modified_at'
+            f' FROM watermeter_image'
+            f' {where}'
+            f' ORDER BY filename',
+            args))
         for row in cursor:
             yield Entry(
                 time=int(row[0]),

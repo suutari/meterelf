@@ -21,10 +21,10 @@ class ValueGetter:
         self.start_from = start_from
 
     def get_first_thousand(self) -> int:
-        return self._db.get_thousands_for_date(self.start_from.date())
+        return self._db.get_thousands_for(self.start_from)
 
     def get_values(self) -> Iterator[ValueRow]:
-        entries = self._db.get_entries_from_date(self.start_from.date())
+        entries = self._db.get_entries(start=self.start_from)
         return (entry_to_value_row(x) for x in entries)
 
 

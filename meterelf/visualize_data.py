@@ -11,7 +11,7 @@ from dateutil.parser import parse as parse_datetime
 
 from ._db_url import get_db
 from ._fnparse import FilenameData
-from ._timestamps import timestamp_from_datetime
+from ._timestamps import DEFAULT_TZ, timestamp_from_datetime
 from ._value_getter import ValueGetter, ValueRow
 
 START_FROM = parse_datetime('2018-09-24T00:00:00+03:00')
@@ -157,7 +157,10 @@ def parse_args(argv: Sequence[str]) -> Arguments:
         'day', 'week', 'month',
         's', 't', 'f', 'm', 'h',
         'd', 'w', 'M'])
+
     args = parser.parse_args(argv[1:])
+
+    # Expand resolution shorthand to a proper identifier
     if len(args.resolution) == 1:
         args.resolution = {
             's': 'second',
@@ -169,6 +172,11 @@ def parse_args(argv: Sequence[str]) -> Arguments:
             'w': 'week',
             'M': 'month',
         }[args.resolution]
+
+    # Make sure start_from datetime has a timezone
+    if not args.start_from.tzinfo:
+        args.start_from = DEFAULT_TZ.localize(args.start_from)
+
     return Arguments(
         db_url=args.db_url,
         verbose=args.verbose,
