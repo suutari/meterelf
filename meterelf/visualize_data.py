@@ -4,7 +4,6 @@ import argparse
 import sys
 from dataclasses import dataclass
 from datetime import datetime, timedelta
-from decimal import Decimal
 from typing import (
     Callable, Iterator, List, NamedTuple, Optional, Sequence, Tuple, Union)
 
@@ -12,6 +11,7 @@ from dateutil.parser import parse as parse_datetime
 
 from ._db_url import get_db
 from ._fnparse import FilenameData
+from ._timestamps import timestamp_from_datetime
 from ._value_getter import ValueGetter, ValueRow
 
 START_FROM = parse_datetime('2018-09-24T00:00:00+03:00')
@@ -233,7 +233,7 @@ def generate_table_data(value_getter: ValueGetter) -> Iterator[List[str]]:
 def generate_influx_data(value_getter: ValueGetter) -> Iterator[str]:
     for (dt, data) in generate_raw_data(value_getter):
         vals = ','.join(f'{key}={value}' for (key, value) in data if value)
-        ts = int(Decimal(f'{dt:%s.%f}') * (10**9))
+        ts = timestamp_from_datetime(dt)
         yield f'water {vals} {ts}'
 
 
