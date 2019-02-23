@@ -244,13 +244,13 @@ def generate_raw_data(
 
     for x in gatherer.get_values():
         data: List[Tuple[str, str]] = [
-            ('value', f'{x.fv:.3f}'),
+            ('value', f'{x.fv:.9f}'),
             ('litres_per_minute', f'{60.0 * x.dfv / x.dt.total_seconds():.9f}'
              if x.dfv is not None and x.dt else ''),
-            ('value_diff', f'{x.dfv:.3f}' if x.dfv is not None else ''),
+            ('value_diff', f'{x.dfv:.9f}' if x.dfv is not None else ''),
             ('time_diff', f'{x.dt.total_seconds():.2f}'
              if x.dt is not None else ''),
-            ('correction', f'{x.correction:.3f}'),
+            ('correction', f'{x.correction:.9f}'),
             ('event_num', f'{x.filename_data.event_number or ""}'),
             ('format', f'"{x.filename_data.extension or ""}"'),
             ('snapshot', 't' if x.filename_data.is_snapshot else 'f'),
