@@ -45,6 +45,7 @@ class InterpretedValue:
     dt: Optional[timedelta]  # Difference in Timestamp
     dfv: Optional[float]  # Difference in Full Value
     correction: float  # Correction done to the full value
+    correction_reason: str
     synthetic: bool
     filename: str
     filename_data: FilenameData
@@ -75,6 +76,7 @@ class InterpretedPoint:
             dt: Optional[timedelta],
             dfv: Optional[float],
             correction: float = 0.0,
+            correction_reason: str = '',
     ) -> 'InterpretedPoint':
         return cls(
             value_row=value_row,
@@ -85,6 +87,7 @@ class InterpretedPoint:
                 dt=dt,
                 dfv=dfv,
                 correction=correction,
+                correction_reason=correction_reason,
                 synthetic=False,
                 filename=value_row.filename,
                 filename_data=value_row.data,
@@ -202,9 +205,11 @@ def print_ignores(value_getter: ValueGetter) -> None:
             'OK' if (x.value and not x.value.correction) else
             'c ' if x.value else
             '  ')
+        val = x.value
+        corr = val.correction if val else None
         suffix = (
-            f' {x.ignore}' if not x.value else
-            f' Correction: {x.value.correction:.3f}' if x.value.correction
+            f' {x.ignore}' if not val else
+            f' Correction: {corr:.3f} {val.correction_reason}' if corr
             else '')
         if x.value:
             last_value = x.value.fv
@@ -621,6 +626,7 @@ class DataGatherer:
             fv = (1000 * nthousands) + v
             dfv = (fv - lfv) if lfv is not None else None  # type: ignore
             correction = 0.0
+            correction_reason: str = ''
 
             # Compose nfv = Next Full Value
             nfv: Optional[float]
@@ -634,16 +640,6 @@ class DataGatherer:
             else:
                 nfv = None
 
-            if dfv is not None and dfv < 0:
-                if abs(dfv) > MAX_CORRECTION:
-                    yield ignore(
-                        f'Backward movement of {dfv:.3f} from {lv} to {v}')
-                    continue
-                else:
-                    fv = lfv
-                    correction = -dfv
-                    dfv = 0.0
-
             if ldt is not None and dt < ldt:
                 yield ignore(f'Unordered data: {ldt} vs {dt}')
                 continue
@@ -655,16 +651,44 @@ class DataGatherer:
                 ddt = None
                 time_diff = None
 
-            if dfv is not None and time_diff:
+            if time_diff and dfv is not None:
                 lps = dfv / time_diff
+            else:
+                lps = None
 
+            def correct_if_small_difference(reason: str) -> bool:
+                nonlocal fv, correction, correction_reason, dfv, lps
+                if dfv is not None and abs(dfv) < MAX_CORRECTION:
+                    dfv = 0.0
+                    lps = 0.0
+                    if nfv and lfv and ndt and ldt:
+                        neigh_lps = (nfv - lfv) / (ndt - ldt).total_seconds()
+                        litres = neigh_lps * (dt - ldt).total_seconds()
+                        if litres >= 0 and litres < MAX_CORRECTION:
+                            dfv = litres
+                            lps = neigh_lps
+                    correction = dfv - (fv - lfv)
+                    correction_reason = reason
+                    fv = lfv + dfv
+                    return True
+                return False
+
+            if dfv is not None and dfv < 0:
+                if not correct_if_small_difference('backward'):
+                    yield ignore(
+                        f'Backward movement of {dfv:.3f} from {lv} to {v}')
+                    continue
+
+            if dfv is not None and time_diff:
                 if nfv is not None and lfv <= nfv and not (lfv <= fv <= nfv):
-                    if lps > 2 * (nfv - lfv) / (ndt - ldt).total_seconds():
-                        yield ignore(
-                            f'Too big change (continuity): {lps:.3f} l/s '
-                            f'(from {lfv} to {fv} in '
-                            f'{(dt - ldt).total_seconds()}s)')
-                        continue
+                    neigh_lps = (nfv - lfv) / (ndt - ldt).total_seconds()
+                    if lps > 3 * neigh_lps:
+                        if not correct_if_small_difference('continuity'):
+                            yield ignore(
+                                f'Too big change (continuity): {lps:.3f} l/s '
+                                f'(from {lfv} to {fv} in '
+                                f'{(dt - ldt).total_seconds()}s)')
+                            continue
 
                 is_lonely_snapshot = (fn_data.is_snapshot and time_diff >= 30)
                 next_value_goes_backward = (nfv is not None and nfv < fv)
@@ -673,11 +697,13 @@ class DataGatherer:
                     'reverse' if next_value_goes_backward else
                     'normal')
                 if lps > VALUE_MAX_DIFFS[diff_kind]:
-                    yield ignore(
-                        f'Too big change ({diff_kind}): {lps:.2f} l/s '
-                        f'(from {lfv} to {fv} '
-                        f'in {(dt - ldt).total_seconds()}s)')
-                    continue
+                    reason = f'big diff ({diff_kind})'
+                    if not correct_if_small_difference(reason):
+                        yield ignore(
+                            f'Too big change ({diff_kind}): {lps:.2f} l/s '
+                            f'(from {lfv} to {fv} '
+                            f'in {(dt - ldt).total_seconds()}s)')
+                        continue
 
             if dt == ldt:
                 assert dfv is not None
@@ -689,7 +715,8 @@ class DataGatherer:
                 continue
 
             # Yield data
-            yield InterpretedPoint.create_value(row1, fv, ddt, dfv, correction)
+            yield InterpretedPoint.create_value(
+                row1, fv, ddt, dfv, correction, correction_reason)
 
             # Update last values
             thousands = nthousands
