@@ -1,3 +1,4 @@
+import abc
 from typing import Dict, Optional
 
 import cv2
@@ -9,16 +10,18 @@ from ._utils import convert_to_hls, crop_rect, match_template
 from .exceptions import DialsNotFoundError, ImageLoadingError
 
 
-class ImageFile:
+class ImageSource(metaclass=abc.ABCMeta):
     def __init__(
             self,
-            filename: str,
+            *,
             params: _Params,
-            bgr_image: Optional[Image] = None,
+            filename: Optional[str] = None,
+            cropped: bool = False,
     ) -> None:
-        self.filename = filename
-        self.params = params
-        self.bgr_image = bgr_image
+        self.params: _Params = params
+        self.filename: str = filename or ''
+        self.cropped: bool = cropped
+        self._bgr_image: Optional[Image] = None
 
     def get_dials_hls(self) -> Image:
         hls_image = self.get_hls_image()
@@ -44,14 +47,18 @@ class ImageFile:
         return cv2.warpAffine(bgr_image, m, (w, h))
 
     def get_bgr_image(self) -> Image:
-        if self.bgr_image is not None:
-            return self.bgr_image
-        img = cv2.imread(self.filename)
-        if img is None:
-            raise ImageLoadingError(self.filename)
-        return self._crop_meter(img)
+        if self._bgr_image is None:
+            uncropped_bgr_image = self.load_bgr_data()
+            self._bgr_image = self._crop_meter(uncropped_bgr_image)
+        return self._bgr_image
+
+    @abc.abstractmethod
+    def load_bgr_data(self) -> Image:
+        pass
 
     def _crop_meter(self, img: Image) -> Image:
+        if self.cropped:
+            return img
         return crop_rect(img, self.params.meter_rect)
 
     def _find_dials(self, img_hls: Image) -> TemplateMatchResult:
@@ -64,6 +71,37 @@ class ImageFile:
                 self.filename, extra_info={'match val': match_result.max_val})
 
         return match_result
+
+
+class FileImageSource(ImageSource):
+    def __init__(
+            self,
+            filename: str,
+            params: _Params,
+    ) -> None:
+        super().__init__(params=params, filename=filename)
+
+    def load_bgr_data(self) -> Image:
+        img = cv2.imread(self.filename)
+        if img is None:
+            raise ImageLoadingError(self.filename)
+        return img
+
+
+class DataImageSource(ImageSource):
+    def __init__(
+            self,
+            bgr_data: Image,
+            params: _Params,
+            filename: Optional[str] = None,
+            *,
+            cropped: bool = False,
+    ) -> None:
+        super().__init__(params=params, filename=filename, cropped=cropped)
+        self._bgr_data = bgr_data
+
+    def load_bgr_data(self) -> Image:
+        return self._bgr_data
 
 
 _dials_template_map: Dict[int, Image] = {}

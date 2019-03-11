@@ -7,7 +7,7 @@ import numpy
 from . import _debug
 from ._colors import BGR_BLACK, BGR_MAGENTA, HlsColor
 from ._dial_data import get_dial_data
-from ._image import ImageFile
+from ._image import ImageSource
 from ._params import Params as _Params
 from ._types import DialData, Image, PointAsArray, Rect
 from ._utils import (
@@ -16,7 +16,7 @@ from ._utils import (
 from .exceptions import DialAngleDeterminingError, NeedleContoursNotFoundError
 
 
-def get_meter_value(imgf: ImageFile) -> Dict[str, float]:
+def get_meter_value(imgf: ImageSource) -> Dict[str, float]:
     params = imgf.params
     dials_hls = imgf.get_dials_hls()
 

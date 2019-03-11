@@ -5,7 +5,7 @@ from typing import Iterable, Iterator, List, Union
 import cv2
 
 from . import _debug
-from ._image import ImageFile
+from ._image import DataImageSource, FileImageSource
 from ._params import Params as _Params
 from ._types import DialCenter, Image
 from ._utils import (
@@ -34,7 +34,7 @@ def find_dial_centers_from_image(
         params: _Params,
         avg_meter: Image,
 ) -> List[DialCenter]:
-    avg_meter_imgf = ImageFile('<average_image>', params, avg_meter)
+    avg_meter_imgf = DataImageSource(avg_meter, params, cropped=True)
     dials_hls = avg_meter_imgf.get_dials_hls()
 
     needles_mask = get_needles_mask_by_color(params, dials_hls)
@@ -65,7 +65,7 @@ def get_average_meter_image(params: _Params, files: Iterable[str]) -> Image:
 
 def get_norm_images(params: _Params, files: Iterable[str]) -> Iterator[Image]:
     return (
-        normalize_image(ImageFile(x, params).get_bgr_image_t())
+        normalize_image(FileImageSource(x, params).get_bgr_image_t())
         for x in files)
 
 
