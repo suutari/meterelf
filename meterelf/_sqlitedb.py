@@ -78,7 +78,7 @@ class SqliteDatabase:
             'SELECT iso_date, value FROM watermeter_thousands'
             ' ORDER BY iso_date'))
         for (iso_date, value) in cursor:
-            naive_dt = datetime.fromisoformat(iso_date)
+            naive_dt = datetime.strptime(iso_date, '%Y-%m-%d')
             yield (DEFAULT_TZ.localize(naive_dt), value)
 
     def get_entries(self, start: Optional[datetime] = None) -> Iterator[Entry]:
