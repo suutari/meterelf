@@ -1,5 +1,7 @@
+import sys
 import time
 from datetime import datetime, tzinfo
+from typing import Callable
 
 import pytz
 
@@ -7,14 +9,11 @@ DEFAULT_TZ = pytz.timezone('Europe/Helsinki')
 
 _EPOCH = datetime(1970, 1, 1, 0, 0, 0, tzinfo=pytz.UTC)
 
-_get_time = time.time
-
-
-def _time_ns() -> int:
-    return int(_get_time() * 1_000_000_000)
-
-
-time_ns = time.time_ns if hasattr(time, 'time_ns') else _time_ns
+if sys.version_info >= (3, 7):
+    time_ns = time.time_ns
+else:
+    def time_ns(*, get_time: Callable[[], float] = time.time) -> int:
+        return int(get_time() * 1_000_000_000)
 
 
 def timestamp_from_datetime(dt: datetime) -> int:
