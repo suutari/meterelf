@@ -661,7 +661,8 @@ class DataGatherer:
                 if dfv is not None and abs(dfv) < MAX_CORRECTION:
                     dfv = 0.0
                     lps = 0.0
-                    if nfv and lfv and ndt and ldt:
+                    if nfv and lfv and ndt and ldt and (
+                            (ndt - ldt).total_seconds() < 15.0):
                         neigh_lps = (nfv - lfv) / (ndt - ldt).total_seconds()
                         litres = neigh_lps * (dt - ldt).total_seconds()
                         if litres >= 0 and litres < MAX_CORRECTION:
