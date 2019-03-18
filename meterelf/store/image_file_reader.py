@@ -12,7 +12,7 @@ from itertools import groupby
 from typing import (
     Callable, Dict, Iterable, Iterator, Optional, Sequence, Tuple)
 
-from . import _api as meterelf
+from .. import _api as meterelf
 from ._db import Entry, StoringDatabase
 from ._db_url import get_db
 from ._fnparse import timestamp_from_filename
