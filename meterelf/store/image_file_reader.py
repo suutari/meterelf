@@ -12,7 +12,8 @@ from itertools import groupby
 from typing import (
     Callable, Dict, Iterable, Iterator, Optional, Sequence, Tuple)
 
-from .. import _api as meterelf
+import meterelf
+
 from ._db import Entry, StoringDatabase
 from ._db_url import get_db
 from ._fnparse import timestamp_from_filename
@@ -63,6 +64,7 @@ class DataCollector:
             only_last_days: Optional[int] = None,
     ) -> None:
         timer = Timer()
+        analyze_timer = Timer()
         images_processed = 0
         start_date: date = (
             date.today() - timedelta(days=only_last_days)
@@ -94,13 +96,15 @@ class DataCollector:
                     if path.endswith(self.image_extensions)]
                 processor = _NewImageProcessorForDir(
                     self.db, self.meter_value_getter, day_path,
-                    timer=timer)
+                    timer=timer, analyze_timer=analyze_timer)
                 process_in_blocks(images, processor.process_new_images)
                 images_processed += processor.processed_count
         print()
         print(f'Processed {images_processed} images')
         print()
         timer.print_timings(images_processed, 'image')
+        print()
+        analyze_timer.print_timings(images_processed, 'image')
 
 
 class Timer:
@@ -115,8 +119,11 @@ class Timer:
             yield
         finally:
             end = time.time()
-            old_time = self.action_durations.get(name, 0.0)
-            self.action_durations[name] = old_time + (end - start)
+            self.add_time_to_action(name, end - start)
+
+    def add_time_to_action(self, name: str, seconds: float) -> None:
+        self.action_durations.setdefault(name, 0.0)
+        self.action_durations[name] += seconds
 
     def get_times(self) -> Dict[str, float]:
         total = time.time() - self.start
@@ -152,14 +159,16 @@ class _NewImageProcessorForDir:
             directory: str,
             do_replace: bool = False,
             timer: Optional[Timer] = None,
+            analyze_timer: Optional[Timer] = None,
     ) -> None:
         self.db = db
-        self.meter_value_getter = meter_value_getter
+        self.meter_value_getter = TimingMeterValueGetter(meter_value_getter)
         self.directory = directory
         self._day_dir = os.path.basename(directory)
         self._month_dir = os.path.basename(os.path.dirname(directory))
         self.do_replace = do_replace
         self.timer: Timer = timer or Timer()
+        self.analyze_timer: Timer = analyze_timer or Timer()
         self.processed_count = 0
 
     def process_new_images(self, filenames: Sequence[str]) -> None:
@@ -179,7 +188,8 @@ class _NewImageProcessorForDir:
 
     def _read_data_and_enter_to_db(self, paths: Iterable[str]) -> None:
         with self.timer.time_action('analyzing images'):
-            image_data = get_data_of_images(self.meter_value_getter, paths)
+            image_data = get_data_of_images(
+                self.meter_value_getter, paths, self.analyze_timer)
         entries = (
             Entry(
                 time=timestamp_from_filename(filename, DEFAULT_TZ),
@@ -194,15 +204,42 @@ class _NewImageProcessorForDir:
         self.processed_count += len(image_data)
 
 
+class TimingMeterValueGetter:
+    def __init__(
+            self,
+            meter_value_getter: meterelf.MeterValueGetter,
+    ) -> None:
+        self.meter_value_getter = meter_value_getter
+
+    def __call__(
+            self,
+            filename: str,
+    ) -> Tuple[meterelf.MeterImageData, Dict[str, float]]:
+        timer = Timer()
+        with timer.time_action('reading image files'):
+            bgr_data = meterelf.load_image_file(filename)
+        with timer.time_action('analyzing image data'):
+            image_data = self.meter_value_getter.get_data(
+                filename=filename, bgr_data=bgr_data)
+        return (image_data, timer.action_durations)
+
+
 def get_data_of_images(
-        meter_value_getter: meterelf.MeterValueGetter,
+        meter_value_getter: TimingMeterValueGetter,
         paths: Iterable[str],
+        timer: Timer,
 ) -> Dict[str, Tuple[Optional[float], str]]:
     if not paths:
         return {}
     with multiprocessing.Pool() as pool:
-        entries = pool.imap_unordered(meter_value_getter.get_data, paths)
-        return dict(_format_image_data(x) for x in entries)
+        entries_with_timings = pool.imap_unordered(meter_value_getter, paths)
+        result: Dict[str, Tuple[Optional[float], str]] = {}
+        for (entry, action_durations) in entries_with_timings:
+            (basename, data) = _format_image_data(entry)
+            result[basename] = data
+            for (action, duration) in action_durations.items():
+                timer.add_time_to_action(action, duration)
+        return result
 
 
 def _format_image_data(

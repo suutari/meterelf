@@ -82,10 +82,14 @@ class FileImageSource(ImageSource):
         super().__init__(params=params, filename=filename)
 
     def load_bgr_data(self) -> Image:
-        img = cv2.imread(self.filename)
-        if img is None:
-            raise ImageLoadingError(self.filename)
-        return img
+        return load_image_file(self.filename)
+
+
+def load_image_file(filename: str) -> Image:
+    img = cv2.imread(filename)
+    if img is None:
+        raise ImageLoadingError(filename)
+    return img
 
 
 class DataImageSource(ImageSource):
