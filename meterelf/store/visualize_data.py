@@ -198,9 +198,9 @@ def read_file(path: str) -> str:
 
 
 def print_ignores(value_getter: ValueGetter) -> None:
-    gatherer = DataGatherer(value_getter, warn=ignore_warning)
+    processor = DataProcessor(value_getter, warn=ignore_warning)
     last_value = 0.0
-    for x in gatherer.get_interpreted_data():
+    for x in processor.get_interpreted_data():
         status = (
             'OK' if (x.value and not x.value.correction) else
             'c ' if x.value else
@@ -253,9 +253,9 @@ def generate_influx_data(value_getter: ValueGetter) -> Iterator[str]:
 def generate_raw_data(
         value_getter: ValueGetter,
 ) -> Iterator[Tuple[datetime, List[Tuple[str, str]]]]:
-    gatherer = DataGatherer(value_getter, warn=ignore_warning)
+    processor = DataProcessor(value_getter, warn=ignore_warning)
 
-    for x in gatherer.get_values():
+    for x in processor.get_values():
         data: List[Tuple[str, str]] = [
             ('value', f'{x.fv:.9f}'),
             ('litres_per_minute', f'{60.0 * x.dfv / x.dt.total_seconds():.9f}'
@@ -299,13 +299,9 @@ class DataGatherer:
             amend_values: bool = False,
             warn: Optional[Callable[[str], None]] = None,
     ) -> None:
-        self.value_getter = value_getter
-        self._warn_func: Callable[[str], None] = warn or print_warning
+        self.processor = DataProcessor(value_getter, warn)
         self.resolution: str = resolution
         self.amend_values: bool = amend_values
-
-    def warn(self, message: str, filename: str = '') -> None:
-        self._warn_func(f'{message}{f", in {filename}" if filename else ""}')
 
     @property
     def resolution(self) -> str:
@@ -504,7 +500,7 @@ class DataGatherer:
         last_group = None
         entry = None
         get_values = (self._get_amended_values if self.amend_values
-                      else self.get_values)
+                      else self.processor.get_values)
         for value in get_values():
             group = self.get_group(value.t)
             if last_group is None or group != last_group:
@@ -540,7 +536,7 @@ class DataGatherer:
 
     def _get_amended_values(self) -> Iterator[InterpretedValue]:
         last_value = None
-        for value in self.get_values():
+        for value in self.processor.get_values():
             if last_value and value.dfv > 0.1 and last_value.dfv > 0:
                 t_steps = list(self._get_time_steps_between(
                     last_value.t, value.t))
@@ -586,6 +582,19 @@ class DataGatherer:
             end: datetime,
     ) -> bool:
         return self._step_timestamp(start) < self._truncate_timestamp(end)
+
+
+class DataProcessor:
+    def __init__(
+            self,
+            value_getter: ValueGetter,
+            warn: Optional[Callable[[str], None]] = None,
+    ) -> None:
+        self.value_getter = value_getter
+        self._warn_func: Callable[[str], None] = warn or print_warning
+
+    def warn(self, message: str, filename: str = '') -> None:
+        self._warn_func(f'{message}{f", in {filename}" if filename else ""}')
 
     def get_values(self) -> Iterator[InterpretedValue]:
         for point in self.get_interpreted_data():
