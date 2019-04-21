@@ -13,6 +13,7 @@ from typing import (
     Callable, Dict, Iterable, Iterator, Optional, Sequence, Tuple)
 
 import meterelf
+import meterelf.exceptions
 
 from ._db import Entry, StoringDatabase
 from ._db_url import get_db
@@ -217,7 +218,13 @@ class TimingMeterValueGetter:
     ) -> Tuple[meterelf.MeterImageData, Dict[str, float]]:
         timer = Timer()
         with timer.time_action('reading image files'):
-            bgr_data = meterelf.load_image_file(filename)
+            try:
+                bgr_data = meterelf.load_image_file(filename)
+            except meterelf.exceptions.ImageLoadingError as error:
+                result_data = meterelf.MeterImageData(
+                    filename=filename, value=None,
+                    error=error, meter_values={})
+                return (result_data, timer.action_durations)
         with timer.time_action('analyzing image data'):
             image_data = self.meter_value_getter.get_data(
                 filename=filename, bgr_data=bgr_data)
