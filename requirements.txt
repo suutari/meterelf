@@ -3,6 +3,6 @@
 #   prequ update
 #
 -e .
-numpy==1.16.0             # via opencv-python
+numpy==1.22.0             # via opencv-python
 opencv-python==3.4.5.20   # via meterelf
 pyyaml==4.2b4
