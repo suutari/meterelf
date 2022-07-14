@@ -1,0 +1,8 @@
+# This is requirements file for miniconda environment:
+# conda update conda
+# conda clean --all
+# conda create -n meterelf38 python=3.8
+# conda activate meterelf38
+numpy==1.17.3
+opencv-python==3.4.8.29
+pyyaml==4.2b4
